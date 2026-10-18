@@ -10,6 +10,7 @@ import com.sgcv.model.Articulo;
 import com.sgcv.model.ArticuloEstandar;
 import com.sgcv.model.ArticuloPromocional;
 import com.sgcv.model.Cliente;
+import com.sgcv.model.Cobranza;
 import com.sgcv.model.DetalleEntrega;
 import com.sgcv.model.Entrega;
 import com.sgcv.service.EntregaService;
@@ -35,6 +36,7 @@ public class EntregaServiceTest {
     private FakeClienteDAO clienteDAO;
     private FakeArticuloDAO articuloDAO;
     private FakeEntregaDAO entregaDAO;
+    private FakeCobranzaDAO cobranzaDAO;
     private EntregaService entregaService;
     private Connection dummyConnection;
 
@@ -43,6 +45,7 @@ public class EntregaServiceTest {
         clienteDAO = new FakeClienteDAO();
         articuloDAO = new FakeArticuloDAO();
         entregaDAO = new FakeEntregaDAO();
+        cobranzaDAO = new FakeCobranzaDAO();
 
         // Conexión simulada para transacciones desacopladas de servidor JDBC
         dummyConnection = (Connection) Proxy.newProxyInstance(
@@ -59,8 +62,9 @@ public class EntregaServiceTest {
                 }
         );
 
-        entregaService = new EntregaService(clienteDAO, articuloDAO, entregaDAO, () -> dummyConnection);
+        entregaService = new EntregaService(clienteDAO, articuloDAO, entregaDAO, cobranzaDAO, () -> dummyConnection);
     }
+
 
     @Nested
     @DisplayName("1. Control de Stock Físico")
@@ -202,6 +206,94 @@ public class EntregaServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("4. Parada Comercial en Ruta (CU-01 + CU-02)")
+    class ParadaComercialTest {
+
+        @Test
+        @DisplayName("Registra cobranza de deuda anterior sin dejar mercadería (0 bultos) generando solo recibo")
+        void testRegistrarParadaSoloCobranzaDeuda() throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException {
+            Cliente cliente = new Cliente(1, "Rotiseria El Sol", "30-71987654-2",
+                    "San Martin 1200", "11-9876-5432", "Zona Oeste",
+                    new BigDecimal("100000.00"), new BigDecimal("300000.00"), true);
+            clienteDAO.guardar(cliente);
+
+            Cobranza cob = new Cobranza();
+            cob.setIdCliente(1);
+            cob.setMontoTotal(new BigDecimal("40000.00"));
+            cob.agregarDetalle(new com.sgcv.model.DetalleCobranza("EFECTIVO", new BigDecimal("40000.00"), "Cobro en camioneta"));
+
+            com.sgcv.model.ParadaResult res = entregaService.registrarParadaCompleta(null, cob, false);
+
+            assertFalse(res.huboEntrega());
+            assertTrue(res.huboCobranza());
+            assertNotNull(res.getNumeroRecibo());
+            assertEquals(new BigDecimal("40000.00"), res.getTotalCobrado());
+            assertEquals(new BigDecimal("60000.00"), res.getNuevoSaldoCliente());
+        }
+
+        @Test
+        @DisplayName("Registra entrega y cobranza mixta simultáneamente emitiendo remito y recibo")
+        void testRegistrarParadaMixtaEntregaYCobranza() throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException {
+            Cliente cliente = new Cliente(2, "Polleria Los Primos", "30-88888888-8",
+                    "Mitre 500", "11-2222-3333", "Zona Sur",
+                    new BigDecimal("50000.00"), new BigDecimal("400000.00"), true);
+            clienteDAO.guardar(cliente);
+
+            ArticuloEstandar art = new ArticuloEstandar(1, "POLL-ENT-20", "Pollo Entero",
+                    "Caja x 20kg", new BigDecimal("42000.00"), new BigDecimal("54000.00"),
+                    30, 5, true);
+            articuloDAO.guardar(art);
+
+            Entrega entrega = new Entrega();
+            entrega.setIdCliente(2);
+            entrega.agregarDetalle(new DetalleEntrega(1, 2, new BigDecimal("54000.00"), new BigDecimal("42000.00"), BigDecimal.ZERO)); // Total = 108.000
+
+            Cobranza cob = new Cobranza();
+            cob.setIdCliente(2);
+            cob.setMontoTotal(new BigDecimal("50000.00"));
+            cob.agregarDetalle(new com.sgcv.model.DetalleCobranza("EFECTIVO", new BigDecimal("50000.00"), "Pago parcial"));
+
+            com.sgcv.model.ParadaResult res = entregaService.registrarParadaCompleta(entrega, cob, false);
+
+            assertTrue(res.huboEntrega());
+            assertTrue(res.huboCobranza());
+            assertEquals(new BigDecimal("108000.00"), res.getTotalEntrega());
+            assertEquals(new BigDecimal("50000.00"), res.getTotalCobrado());
+            // Saldo anterior 50.000 + 108.000 - 50.000 = 108.000
+            assertEquals(new BigDecimal("108000.00"), res.getNuevoSaldoCliente());
+            assertEquals(28, art.getStockDeposito());
+        }
+
+        @Test
+        @DisplayName("Permite autorizar excepcionalmente exceso de crédito en parada comercial")
+        void testRegistrarParadaExcesoCreditoAutorizado() throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException {
+            Cliente cliente = new Cliente(3, "Supermercado Norte", "30-99999999-9",
+                    "Av Belgrano 100", "11-4444-5555", "Zona Norte",
+                    new BigDecimal("90000.00"), new BigDecimal("100000.00"), true);
+            clienteDAO.guardar(cliente);
+
+            ArticuloEstandar art = new ArticuloEstandar(1, "POLL-ENT-20", "Pollo Entero",
+                    "Caja x 20kg", new BigDecimal("42000.00"), new BigDecimal("54000.00"),
+                    20, 5, true);
+            articuloDAO.guardar(art);
+
+            Entrega entrega = new Entrega();
+            entrega.setIdCliente(3);
+            entrega.agregarDetalle(new DetalleEntrega(1, 1, new BigDecimal("54000.00"), new BigDecimal("42000.00"), BigDecimal.ZERO)); // Nuevo saldo = 144.000 > 100.000
+
+            // Sin autorizar debe lanzar LimiteCreditoExcedidoException
+            assertThrows(LimiteCreditoExcedidoException.class, () ->
+                    entregaService.registrarParadaCompleta(entrega, null, false)
+            );
+
+            // Con autorizarExcesoCredito = true debe prosperar
+            com.sgcv.model.ParadaResult res = entregaService.registrarParadaCompleta(entrega, null, true);
+            assertTrue(res.huboEntrega());
+            assertEquals(new BigDecimal("144000.00"), res.getNuevoSaldoCliente());
+        }
+    }
+
     // =========================================================================
     // Implementaciones Simuladas (Fakes de Prueba) para Ejecución Hermética
     // =========================================================================
@@ -225,6 +317,11 @@ public class EntregaServiceTest {
                 return true;
             }
             return false;
+        }
+
+        @Override
+        public List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) {
+            return new ArrayList<>();
         }
     }
 
@@ -275,4 +372,33 @@ public class EntregaServiceTest {
             return String.format("REM-0001-%08d", contador);
         }
     }
+
+    private static class FakeCobranzaDAO implements com.sgcv.dao.ICobranzaDAO {
+        private int contador = 1;
+        final List<com.sgcv.model.Cobranza> cobranzas = new ArrayList<>();
+
+        @Override
+        public int registrarCobranza(com.sgcv.model.Cobranza cobranza) {
+            return registrarCobranza(cobranza, null);
+        }
+
+        @Override
+        public int registrarCobranza(com.sgcv.model.Cobranza cobranza, Connection conn) {
+            cobranza.setIdCobranza(contador);
+            cobranza.setNumeroRecibo(String.format("REC-0001-%08d", contador++));
+            cobranzas.add(cobranza);
+            return cobranza.getIdCobranza();
+        }
+
+        @Override
+        public List<com.sgcv.model.Cobranza> listarPorFecha(java.time.LocalDate fecha) {
+            return cobranzas;
+        }
+
+        @Override
+        public BigDecimal obtenerTotalCobradoHoyPorMedio(String medioPago, java.time.LocalDate fecha, Connection conn) {
+            return BigDecimal.ZERO;
+        }
+    }
 }
+

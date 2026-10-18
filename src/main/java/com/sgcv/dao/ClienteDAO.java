@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,6 +56,65 @@ public class ClienteDAO implements IClienteDAO {
             ps.setInt(2, idCliente);
             return ps.executeUpdate() > 0;
         }
+    }
+
+    @Override
+    public List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) throws SQLException {
+        List<com.sgcv.model.MovimientoCuentaCorriente> extracto = new ArrayList<>();
+        String sql = """
+                SELECT fecha, tipo, comprobante, concepto, debe, haber
+                FROM (
+                    SELECT 
+                        e.fecha_entrega AS fecha,
+                        'REMITO' AS tipo,
+                        e.numero_remito AS comprobante,
+                        CONCAT('Entrega de bultos en ruta (', COUNT(de.id_detalle_entrega), ' renglones)') AS concepto,
+                        e.total_entrega AS debe,
+                        0.00 AS haber
+                    FROM entregas e
+                    LEFT JOIN detalle_entregas de ON e.id_entrega = de.id_entrega
+                    WHERE e.id_cliente = ? AND e.estado = 'EMITIDA'
+                    GROUP BY e.id_entrega, e.fecha_entrega, e.numero_remito, e.total_entrega
+
+                    UNION ALL
+
+                    SELECT 
+                        c.fecha_cobranza AS fecha,
+                        'RECIBO' AS tipo,
+                        c.numero_recibo AS comprobante,
+                        COALESCE(c.observaciones, 'Cobranza percibida en parada comercial') AS concepto,
+                        0.00 AS debe,
+                        c.monto_total AS haber
+                    FROM cobranzas c
+                    WHERE c.id_cliente = ?
+                ) movs
+                ORDER BY fecha ASC
+                """;
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idCliente);
+            ps.setInt(2, idCliente);
+            try (ResultSet rs = ps.executeQuery()) {
+                BigDecimal saldo = BigDecimal.ZERO;
+                while (rs.next()) {
+                    LocalDateTime fecha = rs.getTimestamp("fecha").toLocalDateTime();
+                    String tipo = rs.getString("tipo");
+                    String comprobante = rs.getString("comprobante");
+                    String concepto = rs.getString("concepto");
+                    BigDecimal debe = rs.getBigDecimal("debe");
+                    BigDecimal haber = rs.getBigDecimal("haber");
+
+                    saldo = saldo.add(debe != null ? debe : BigDecimal.ZERO)
+                                 .subtract(haber != null ? haber : BigDecimal.ZERO);
+
+                    extracto.add(new com.sgcv.model.MovimientoCuentaCorriente(
+                            fecha, tipo, comprobante, concepto, debe, haber, saldo
+                    ));
+                }
+            }
+        }
+        return extracto;
     }
 
     private Cliente mapearCliente(ResultSet rs) throws SQLException {

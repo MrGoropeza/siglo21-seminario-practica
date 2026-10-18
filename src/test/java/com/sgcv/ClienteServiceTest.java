@@ -142,5 +142,11 @@ public class ClienteServiceTest {
             }
             return false;
         }
+
+        @Override
+        public List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) {
+            return new ArrayList<>();
+        }
     }
+
 }

@@ -34,4 +34,13 @@ public interface IClienteService {
      * @throws SQLException ante errores SQL
      */
     boolean verificarRiesgoCrediticio(int idCliente, BigDecimal montoNuevo) throws SQLException;
+
+    /**
+     * Obtiene el extracto histórico cronológico (Libro Mayor) de la cuenta corriente.
+     * @param idCliente identificador del cliente
+     * @return lista de movimientos con Debe, Haber y Saldo
+     * @throws SQLException ante errores SQL
+     */
+    List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) throws SQLException;
 }
+

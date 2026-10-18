@@ -47,7 +47,16 @@ public interface IEntregaService {
     boolean registrarEntrega(Entrega entrega, boolean autorizarExcesoCredito)
             throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException;
 
+    /**
+     * Registra atómicamente una parada comercial en ruta (CU-01 + CU-02):
+     * Emite remito (si hay bultos entregados) y/o emite recibo (si hay cobranza de deuda o de la entrega actual).
+     * Actualiza el saldo de la cuenta corriente de forma consistente.
+     */
+    com.sgcv.model.ParadaResult registrarParadaCompleta(Entrega entrega, com.sgcv.model.Cobranza cobranza, boolean autorizarExcesoCredito)
+            throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException;
+
     IEntregaDAO getEntregaDAO();
     IClienteDAO getClienteDAO();
     IArticuloDAO getArticuloDAO();
 }
+

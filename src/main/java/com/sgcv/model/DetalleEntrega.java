@@ -45,6 +45,12 @@ public class DetalleEntrega {
         this.subtotal = calcularSubtotal();
     }
 
+    public DetalleEntrega(int idArticulo, int cantidadBultos, BigDecimal precioUnitario,
+                          BigDecimal costoUnitario, BigDecimal descuentoUnitario) {
+        this(idArticulo, "", "", cantidadBultos, precioUnitario, costoUnitario, descuentoUnitario);
+    }
+
+
     /**
      * Calcula el subtotal aplicando descuentos unitarios y multiplicando por el volumen.
      * @return subtotal neto del renglón (mínimo cero)

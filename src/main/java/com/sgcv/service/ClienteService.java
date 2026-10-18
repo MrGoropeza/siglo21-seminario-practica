@@ -43,7 +43,13 @@ public class ClienteService implements IClienteService {
         return cliente.estaExcedido(montoNuevo);
     }
 
+    @Override
+    public List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) throws SQLException {
+        return clienteDAO.obtenerExtractoCuentaCorriente(idCliente);
+    }
+
     public IClienteDAO getClienteDAO() {
         return clienteDAO;
     }
 }
+

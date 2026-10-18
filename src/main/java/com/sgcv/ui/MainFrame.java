@@ -1,12 +1,15 @@
 package com.sgcv.ui;
 
 import com.sgcv.model.Articulo;
-import com.sgcv.model.Cliente;
 import com.sgcv.service.ArticuloService;
+import com.sgcv.service.ArqueoService;
 import com.sgcv.service.ClienteService;
+import com.sgcv.service.CobranzaService;
 import com.sgcv.service.EntregaService;
 import com.sgcv.service.IArticuloService;
+import com.sgcv.service.IArqueoService;
 import com.sgcv.service.IClienteService;
+import com.sgcv.service.ICobranzaService;
 import com.sgcv.service.IEntregaService;
 
 import javax.swing.*;
@@ -20,7 +23,6 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
-import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,32 +31,26 @@ import java.util.regex.Pattern;
 
 /**
  * Ventana Principal de la aplicación de escritorio SGCV.
- * Rediseñada para máxima agilidad operativa en ruta:
- * - Tarjetas KPI resumen en cada módulo
- * - Filtrado en tiempo real sin popups invasivos
- * - Ordenamiento algorítmico (MergeSort) y búsqueda binaria directamente integrados en la tabla
- * - Barra de menú limpia y accesible
+ * Diseñada para el flujo real de trabajo en ruta y cierre nocturno:
+ * 1. Parada Comercial en Ruta (CU-01 + CU-02): Carga táctil de los 6 bultos y cobranzas en camioneta.
+ * 2. Cierre y Arqueo Diario (CU-04): Conciliación nocturna y segregación de fondos para frigoríficos.
+ * 3. Cuentas Corrientes y Libro Mayor (CU-06): Auditoría cronológica de remitos (Debe) y recibos (Haber).
+ * 4. Catálogo de Bultos (CU-05): Monitoreo de stock de depósito con ordenamiento y búsqueda rápida.
  */
 public class MainFrame extends JFrame {
 
     private final IClienteService clienteService;
     private final IArticuloService articuloService;
     private final IEntregaService entregaService;
+    private final ICobranzaService cobranzaService;
+    private final IArqueoService arqueoService;
 
     private JTabbedPane tabbedPane;
     private EntregaPanel entregaPanel;
+    private ArqueoPanel arqueoPanel;
+    private CuentasCorrientesPanel cuentasCorrientesPanel;
 
-    // Panel Cuentas Corrientes
-    private DefaultTableModel modelCuentas;
-    private JTable tableCuentas;
-    private TableRowSorter<DefaultTableModel> sorterCuentas;
-    private JTextField txtBuscarCliente;
-    private JComboBox<String> comboFiltroCredito;
-    private JLabel lblKpiTotalClientes;
-    private JLabel lblKpiClientesRiesgo;
-    private JLabel lblKpiSaldoDeudorTotal;
-
-    // Panel Inventario
+    // Componentes del Panel Inventario
     private DefaultTableModel modelInventario;
     private JTable tableInventario;
     private TableRowSorter<DefaultTableModel> sorterInventario;
@@ -67,18 +63,25 @@ public class MainFrame extends JFrame {
     private List<Articulo> articulosMemoria = new ArrayList<>();
 
     public MainFrame() {
-        this(new ClienteService(), new ArticuloService(), new EntregaService());
+        this(new ClienteService(), new ArticuloService(), new EntregaService(), new CobranzaService(), new ArqueoService());
     }
 
     public MainFrame(IClienteService clienteService, IArticuloService articuloService, IEntregaService entregaService) {
+        this(clienteService, articuloService, entregaService, new CobranzaService(), new ArqueoService());
+    }
+
+    public MainFrame(IClienteService clienteService, IArticuloService articuloService, IEntregaService entregaService,
+                     ICobranzaService cobranzaService, IArqueoService arqueoService) {
         super("SGCV - Sistema de Gestión Comercial y Distribución Avícola [Operación en Ruta]");
         this.clienteService = clienteService;
         this.articuloService = articuloService;
         this.entregaService = entregaService;
+        this.cobranzaService = cobranzaService != null ? cobranzaService : new CobranzaService();
+        this.arqueoService = arqueoService != null ? arqueoService : new ArqueoService();
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1100, 750);
-        setMinimumSize(new Dimension(980, 640));
+        setSize(1180, 780);
+        setMinimumSize(new Dimension(1020, 680));
         setLocationRelativeTo(null);
 
         configurarMenuBar();
@@ -110,20 +113,25 @@ public class MainFrame extends JFrame {
         JMenu menuVistas = new JMenu("Navegación");
         menuVistas.setMnemonic(KeyEvent.VK_N);
 
-        JMenuItem itemTab1 = new JMenuItem("1. Registro de Entregas");
+        JMenuItem itemTab1 = new JMenuItem("1. Parada en Ruta (Remitos y Cobranzas)");
         itemTab1.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab1.addActionListener(e -> tabbedPane.setSelectedIndex(0));
         menuVistas.add(itemTab1);
 
-        JMenuItem itemTab2 = new JMenuItem("2. Cuentas Corrientes y Créditos");
+        JMenuItem itemTab2 = new JMenuItem("2. Cierre y Arqueo Diario");
         itemTab2.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_2, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab2.addActionListener(e -> tabbedPane.setSelectedIndex(1));
         menuVistas.add(itemTab2);
 
-        JMenuItem itemTab3 = new JMenuItem("3. Inventario de Mercadería");
+        JMenuItem itemTab3 = new JMenuItem("3. Cuentas Corrientes y Extracto");
         itemTab3.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_3, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab3.addActionListener(e -> tabbedPane.setSelectedIndex(2));
         menuVistas.add(itemTab3);
+
+        JMenuItem itemTab4 = new JMenuItem("4. Catálogo de Bultos");
+        itemTab4.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_4, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        itemTab4.addActionListener(e -> tabbedPane.setSelectedIndex(3));
+        menuVistas.add(itemTab4);
 
         menuBar.add(menuVistas);
 
@@ -148,197 +156,36 @@ public class MainFrame extends JFrame {
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
 
-        // Pestaña 1: Registro de Entregas
-        entregaPanel = new EntregaPanel(entregaService, clienteService, articuloService);
-        tabbedPane.addTab("🚚 Registro de Entregas", entregaPanel);
+        // Pestaña 1: Parada Comercial en Ruta (CU-01 + CU-02)
+        entregaPanel = new EntregaPanel(entregaService, clienteService, articuloService, this::refrescarTodosLosDatos);
+        tabbedPane.addTab("🚚 Parada en Ruta", entregaPanel);
 
-        // Pestaña 2: Cuentas Corrientes
-        tabbedPane.addTab("💳 Cuentas Corrientes", crearPanelCuentasCorrientes());
+        // Pestaña 2: Cierre y Arqueo Diario (CU-04)
+        arqueoPanel = new ArqueoPanel(arqueoService, this::refrescarTodosLosDatos);
+        tabbedPane.addTab("📊 Cierre y Arqueo Diario", arqueoPanel);
 
-        // Pestaña 3: Inventario
-        tabbedPane.addTab("📦 Inventario de Mercadería", crearPanelInventario());
+        // Pestaña 3: Cuentas Corrientes y Extracto (CU-06)
+        cuentasCorrientesPanel = new CuentasCorrientesPanel(clienteService, cobranzaService, this::refrescarTodosLosDatos);
+        tabbedPane.addTab("💳 Cuentas Corrientes y Extracto", cuentasCorrientesPanel);
+
+        // Pestaña 4: Catálogo de Mercadería (CU-05)
+        tabbedPane.addTab("📦 Catálogo de Bultos", crearPanelInventario());
 
         add(tabbedPane, BorderLayout.CENTER);
     }
 
     // =========================================================================
-    // Panel: Monitor de Cuentas Corrientes (CU-06)
-    // =========================================================================
-
-    private JPanel crearPanelCuentasCorrientes() {
-        JPanel panel = new JPanel(new BorderLayout(0, 10));
-        panel.setBorder(new EmptyBorder(12, 14, 14, 14));
-
-        // 1. Tarjetas KPI
-        JPanel panelKpi = new JPanel(new GridLayout(1, 3, 12, 0));
-        lblKpiTotalClientes = new JLabel("0", SwingConstants.CENTER);
-        lblKpiClientesRiesgo = new JLabel("0", SwingConstants.CENTER);
-        lblKpiSaldoDeudorTotal = new JLabel("$0.00", SwingConstants.CENTER);
-
-        panelKpi.add(crearKpiCard("TOTAL CLIENTES EN RUTA", lblKpiTotalClientes, new Color(24, 43, 73)));
-        panelKpi.add(crearKpiCard("CLIENTES EN RIESGO / EXCEDIDOS", lblKpiClientesRiesgo, new Color(220, 53, 69)));
-        panelKpi.add(crearKpiCard("TOTAL SALDO DEUDOR EN CALLE", lblKpiSaldoDeudorTotal, new Color(180, 80, 20)));
-        panel.add(panelKpi, BorderLayout.NORTH);
-
-        // 2. Barra de herramientas integrada (Búsqueda en tiempo real + Filtro)
-        JPanel panelCentro = new JPanel(new BorderLayout(0, 8));
-
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
-        toolbar.setBorder(new CompoundBorder(
-                new LineBorder(new Color(220, 225, 230), 1),
-                new EmptyBorder(4, 8, 4, 8)
-        ));
-        toolbar.setBackground(new Color(250, 252, 255));
-
-        toolbar.add(new JLabel("🔍 Buscar:"));
-        txtBuscarCliente = new JTextField(20);
-        txtBuscarCliente.setToolTipText("Filtrado instantáneo por Razón Social o CUIT");
-        txtBuscarCliente.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e) { aplicarFiltroCuentas(); }
-            @Override public void removeUpdate(DocumentEvent e) { aplicarFiltroCuentas(); }
-            @Override public void changedUpdate(DocumentEvent e) { aplicarFiltroCuentas(); }
-        });
-        toolbar.add(txtBuscarCliente);
-
-        toolbar.add(new JLabel("Filtrar Estado:"));
-        comboFiltroCredito = new JComboBox<>(new String[]{"Todos los Clientes", "Solo con Saldo Deudor", "Solo en Riesgo / Excedidos"});
-        comboFiltroCredito.addActionListener(e -> aplicarFiltroCuentas());
-        toolbar.add(comboFiltroCredito);
-
-        JButton btnActualizar = new JButton("🔄 Actualizar");
-        btnActualizar.addActionListener(e -> refrescarTablaCuentas());
-        toolbar.add(btnActualizar);
-
-        panelCentro.add(toolbar, BorderLayout.NORTH);
-
-        // 3. Tabla Interactiva
-        String[] cols = {"Razón Social", "CUIT", "Zona Reparto", "Saldo Deudor", "Límite Crédito", "Crédito Disponible", "Estado Crediticio"};
-        modelCuentas = new DefaultTableModel(cols, 0) {
-            @Override public boolean isCellEditable(int r, int c) { return false; }
-        };
-        tableCuentas = new JTable(modelCuentas);
-        tableCuentas.setRowHeight(28);
-        tableCuentas.setAutoCreateRowSorter(true);
-        tableCuentas.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        tableCuentas.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-
-        sorterCuentas = new TableRowSorter<>(modelCuentas);
-        tableCuentas.setRowSorter(sorterCuentas);
-
-        // Renderizador con Badge de color para el estado crediticio
-        tableCuentas.getColumnModel().getColumn(6).setCellRenderer(new DefaultTableCellRenderer() {
-            @Override
-            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
-                JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
-                lbl.setHorizontalAlignment(SwingConstants.CENTER);
-                lbl.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-                String texto = value != null ? value.toString() : "";
-                if (texto.contains("EXCEDIDO")) {
-                    lbl.setForeground(new Color(180, 20, 20));
-                    lbl.setText("● " + texto);
-                } else {
-                    lbl.setForeground(new Color(30, 130, 50));
-                    lbl.setText("✔ " + texto);
-                }
-                return lbl;
-            }
-        });
-
-        // Alineación derecha para importes
-        DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
-        rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
-        tableCuentas.getColumnModel().getColumn(3).setCellRenderer(rightRenderer);
-        tableCuentas.getColumnModel().getColumn(4).setCellRenderer(rightRenderer);
-        tableCuentas.getColumnModel().getColumn(5).setCellRenderer(rightRenderer);
-
-        panelCentro.add(new JScrollPane(tableCuentas), BorderLayout.CENTER);
-        panel.add(panelCentro, BorderLayout.CENTER);
-
-        refrescarTablaCuentas();
-        return panel;
-    }
-
-    private void refrescarTablaCuentas() {
-        if (modelCuentas == null) return;
-        modelCuentas.setRowCount(0);
-
-        int totalClientes = 0;
-        int enRiesgo = 0;
-        BigDecimal saldoTotal = BigDecimal.ZERO;
-
-        try {
-            List<Cliente> clientes = clienteService.listarActivos();
-            for (Cliente c : clientes) {
-                totalClientes++;
-                saldoTotal = saldoTotal.add(c.getSaldoCuentaCorriente());
-                boolean excedido = c.estaExcedido(BigDecimal.ZERO);
-                if (excedido) enRiesgo++;
-
-                String estado = excedido ? "EXCEDIDO (RIESGO)" : "NORMAL";
-                BigDecimal disponible = c.getCreditoDisponible();
-
-                modelCuentas.addRow(new Object[]{
-                        c.getRazonSocial(), c.getCuit(), c.getZonaReparto(),
-                        "$" + c.getSaldoCuentaCorriente().setScale(2, RoundingMode.HALF_UP),
-                        "$" + c.getLimiteCredito().setScale(2, RoundingMode.HALF_UP),
-                        "$" + disponible.setScale(2, RoundingMode.HALF_UP),
-                        estado
-                });
-            }
-        } catch (Exception e) {
-            // Modo desconectado silencioso
-        }
-
-        lblKpiTotalClientes.setText(String.valueOf(totalClientes));
-        lblKpiClientesRiesgo.setText(String.valueOf(enRiesgo));
-        lblKpiSaldoDeudorTotal.setText("$" + saldoTotal.setScale(2, RoundingMode.HALF_UP));
-    }
-
-    private void aplicarFiltroCuentas() {
-        if (sorterCuentas == null) return;
-
-        String busqueda = txtBuscarCliente.getText().trim();
-        String filtroEstado = (String) comboFiltroCredito.getSelectedItem();
-
-        List<RowFilter<DefaultTableModel, Object>> filtros = new ArrayList<>();
-
-        if (!busqueda.isEmpty()) {
-            filtros.add(RowFilter.regexFilter("(?i)" + Pattern.quote(busqueda), 0, 1, 2));
-        }
-
-        if ("Solo con Saldo Deudor".equals(filtroEstado)) {
-            filtros.add(new RowFilter<>() {
-                @Override
-                public boolean include(Entry<? extends DefaultTableModel, ?> entry) {
-                    String saldoStr = entry.getStringValue(3).replace("$", "").trim();
-                    try {
-                        return new BigDecimal(saldoStr).compareTo(BigDecimal.ZERO) > 0;
-                    } catch (Exception ex) {
-                        return true;
-                    }
-                }
-            });
-        } else if ("Solo en Riesgo / Excedidos".equals(filtroEstado)) {
-            filtros.add(RowFilter.regexFilter("EXCEDIDO", 6));
-        }
-
-        if (filtros.isEmpty()) {
-            sorterCuentas.setRowFilter(null);
-        } else {
-            sorterCuentas.setRowFilter(RowFilter.andFilter(filtros));
-        }
-    }
-
-    // =========================================================================
-    // Panel: Inventario y Stock (CU-05) con Algoritmos Explícitos
+    // Panel: Inventario y Stock (CU-05) con Búsqueda y Ordenamiento
     // =========================================================================
 
     private JPanel crearPanelInventario() {
         JPanel panel = new JPanel(new BorderLayout(0, 10));
         panel.setBorder(new EmptyBorder(12, 14, 14, 14));
+        panel.setBackground(new Color(245, 247, 250));
 
         // 1. Tarjetas KPI
         JPanel panelKpi = new JPanel(new GridLayout(1, 4, 12, 0));
+        panelKpi.setOpaque(false);
         lblKpiTotalBultos = new JLabel("0", SwingConstants.CENTER);
         lblKpiEstandar = new JLabel("0", SwingConstants.CENTER);
         lblKpiPromocion = new JLabel("0", SwingConstants.CENTER);
@@ -350,19 +197,20 @@ public class MainFrame extends JFrame {
         panelKpi.add(crearKpiCard("ALERTAS CRÍTICAS (STOCK <= MÍNIMO)", lblKpiCriticos, new Color(220, 53, 69)));
         panel.add(panelKpi, BorderLayout.NORTH);
 
-        // 2. Barra de herramientas integrada (Búsqueda en tiempo real + MergeSort + Búsqueda Binaria)
+        // 2. Barra de herramientas integrada (Búsqueda en tiempo real + Ordenar por Stock + Ir a Código)
         JPanel panelCentro = new JPanel(new BorderLayout(0, 8));
+        panelCentro.setOpaque(false);
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
         toolbar.setBorder(new CompoundBorder(
                 new LineBorder(new Color(220, 225, 230), 1),
                 new EmptyBorder(4, 8, 4, 8)
         ));
-        toolbar.setBackground(new Color(250, 252, 255));
+        toolbar.setBackground(Color.WHITE);
 
         toolbar.add(new JLabel("🔍 Buscar:"));
         txtBuscarArticulo = new JTextField(18);
-        txtBuscarArticulo.setToolTipText("Filtrado en tiempo real por código o descripción");
+        txtBuscarArticulo.setToolTipText("Filtrado instantáneo por código o descripción");
         txtBuscarArticulo.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { aplicarFiltroInventario(); }
             @Override public void removeUpdate(DocumentEvent e) { aplicarFiltroInventario(); }
@@ -373,13 +221,13 @@ public class MainFrame extends JFrame {
         JButton btnOrdenarMergeSort = new JButton("🔄 Ordenar por Stock");
         btnOrdenarMergeSort.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         btnOrdenarMergeSort.setToolTipText("Ordenar productos de menor a mayor stock físico");
-        btnOrdenarMergeSort.addActionListener(e -> ejecutarMergeSortEnPantalla());
+        btnOrdenarMergeSort.addActionListener(e -> ejecutarOrdenamientoPorStock());
         toolbar.add(btnOrdenarMergeSort);
 
         JButton btnBusquedaBinaria = new JButton("⚡ Ir a Código");
         btnBusquedaBinaria.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         btnBusquedaBinaria.setToolTipText("Buscar y resaltar producto por su código");
-        btnBusquedaBinaria.addActionListener(e -> ejecutarBusquedaBinariaEnPantalla());
+        btnBusquedaBinaria.addActionListener(e -> ejecutarBusquedaPorCodigo());
         toolbar.add(btnBusquedaBinaria);
 
         JButton btnRefrescar = new JButton("🔄 Recargar Catálogo");
@@ -388,7 +236,7 @@ public class MainFrame extends JFrame {
 
         panelCentro.add(toolbar, BorderLayout.NORTH);
 
-        // 3. Tabla de Artículos
+        // 3. Tabla de Artículos con Cabeceras Clickeables
         String[] cols = {"Código", "Descripción", "Tipo Comercial", "Embalaje", "Costo Reposición", "Precio Venta", "Stock Depósito", "Alerta Mínima"};
         modelInventario = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
@@ -414,7 +262,7 @@ public class MainFrame extends JFrame {
                         int stock = Integer.parseInt(stockStr);
                         int alerta = Integer.parseInt(alertaStr);
                         if (stock <= alerta) {
-                            c.setBackground(new Color(255, 243, 205)); // Alerta suave amarilla/naranja
+                            c.setBackground(new Color(255, 243, 205)); // Alerta suave amarilla
                         } else {
                             c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
                         }
@@ -429,7 +277,7 @@ public class MainFrame extends JFrame {
         panelCentro.add(new JScrollPane(tableInventario), BorderLayout.CENTER);
 
         // 4. Barra de Estado inferior de la pestaña
-        lblStatusInventario = new JLabel("Catálogo cargado y listo para optimización algorítmica.");
+        lblStatusInventario = new JLabel("Catálogo cargado y listo para consulta de stock.");
         lblStatusInventario.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         lblStatusInventario.setForeground(new Color(70, 80, 95));
         lblStatusInventario.setBorder(new EmptyBorder(6, 4, 2, 4));
@@ -499,21 +347,20 @@ public class MainFrame extends JFrame {
         }
     }
 
-    private void ejecutarMergeSortEnPantalla() {
+    private void ejecutarOrdenamientoPorStock() {
         if (articulosMemoria == null || articulosMemoria.isEmpty()) {
             lblStatusInventario.setText("No hay artículos en memoria para ordenar.");
             return;
         }
 
-        // Ejecutar algoritmo clásico MergeSort
         List<Articulo> ordenados = articuloService.ordenarPorStockAscendente(articulosMemoria);
         poblarTablaInventario(ordenados);
 
-        lblStatusInventario.setText("✅ Catálogo ordenado por stock en depósito (de menor a mayor).");
+        lblStatusInventario.setText("✔ Catálogo ordenado por stock en depósito (de menor a mayor).");
         lblStatusInventario.setForeground(new Color(25, 135, 84));
     }
 
-    private void ejecutarBusquedaBinariaEnPantalla() {
+    private void ejecutarBusquedaPorCodigo() {
         if (articulosMemoria == null || articulosMemoria.isEmpty()) {
             lblStatusInventario.setText("No hay artículos en catálogo para buscar.");
             return;
@@ -530,7 +377,6 @@ public class MainFrame extends JFrame {
             codigoBuscado = codigoBuscado.trim();
         }
 
-        // Ordenar copia por código alfabético para satisfacer la precondición de búsqueda binaria
         List<Articulo> listaOrdenadaPorCodigo = new ArrayList<>(articulosMemoria);
         listaOrdenadaPorCodigo.sort(Comparator.comparing(Articulo::getCodigo, String.CASE_INSENSITIVE_ORDER));
 
@@ -539,7 +385,6 @@ public class MainFrame extends JFrame {
         if (indice >= 0) {
             Articulo encontrado = listaOrdenadaPorCodigo.get(indice);
 
-            // Localizar y seleccionar la fila en la tabla visual
             for (int r = 0; r < tableInventario.getRowCount(); r++) {
                 String codEnTabla = (String) tableInventario.getValueAt(r, 0);
                 if (codEnTabla.equalsIgnoreCase(encontrado.getCodigo())) {
@@ -550,19 +395,15 @@ public class MainFrame extends JFrame {
             }
 
             lblStatusInventario.setText(String.format(
-                    "✅ Producto '%s - %s' localizado (Stock: %d bultos | $%s).",
+                    "✔ Producto '%s - %s' localizado (Stock: %d bultos | $%s).",
                     encontrado.getCodigo(), encontrado.getDescripcion(),
                     encontrado.getStockDeposito(), encontrado.getPrecioVentaBase()));
             lblStatusInventario.setForeground(new Color(25, 135, 84));
         } else {
-            lblStatusInventario.setText("⚠️ No se encontró ningún producto con el código '" + codigoBuscado + "'.");
+            lblStatusInventario.setText("⚠ No se encontró ningún producto con el código '" + codigoBuscado + "'.");
             lblStatusInventario.setForeground(new Color(220, 53, 69));
         }
     }
-
-    // =========================================================================
-    // Métodos Auxiliares de UI
-    // =========================================================================
 
     private JPanel crearKpiCard(String titulo, JLabel lblValor, Color colorValor) {
         JPanel card = new JPanel(new BorderLayout(4, 2));
@@ -585,11 +426,10 @@ public class MainFrame extends JFrame {
     }
 
     private void refrescarTodosLosDatos() {
-        refrescarTablaCuentas();
+        if (entregaPanel != null) entregaPanel.recargarDatosMaestros();
+        if (arqueoPanel != null) arqueoPanel.recargarMetricas();
+        if (cuentasCorrientesPanel != null) cuentasCorrientesPanel.recargarClientes(null);
         refrescarTablaInventario();
-        if (entregaPanel != null) {
-            entregaPanel.cargarDatosMaestros();
-        }
     }
 
     private void mostrarGuiaRepartidor() {
@@ -598,32 +438,41 @@ public class MainFrame extends JFrame {
                 GUÍA OPERATIVA EN RUTA PARA CHOFER / REPARTIDOR (SGCV)
                 ==========================================================
                 
-                PASO 1: SELECCIONAR CLIENTE
-                • Utilice el filtro de Zona para acotar la lista a su recorrido.
-                • Observe la tarjeta de crédito: Verde = Habilitado | Rojo = Excedido.
+                PESTAÑA 1: PARADA EN RUTA (REMITO Y COBRANZA)
+                • Seleccione el cliente de la lista (puede filtrar por zona).
+                • Verifique el Saldo Deudor y el Crédito Disponible.
+                • Seleccione los bultos entregados directamente con [+], [-] o [+5].
+                • Si el cliente paga en la parada, ingrese el monto en Efectivo o
+                  Transferencia bancaria.
+                • El botón inferior adapta su función automáticamente:
+                  - Si entrega bultos sin cobro: EMITE REMITO A CUENTA CORRIENTE.
+                  - Si cobra deuda anterior sin dejar bultos: EMITE RECIBO DE PAGO.
+                  - Si entrega y cobra simultáneamente: EMITE REMITO Y RECIBO.
                 
-                PASO 2: CARGA RÁPIDA DE BULTOS
-                • Seleccione el artículo avícola (Cajas de Pollo, Pata-Muslo, etc.).
-                • Use los botones rápidos [+1], [+5], [+10] para sumar bultos al instante.
-                • Presione [➕ Agregar al Remito] para incorporar el renglón.
-                • Las bonificaciones por volumen se calculan automáticamente:
-                  - Frescos: 5% de descuento en pedidos >= 10 bultos.
-                  - Congelados IQF: 4% de descuento en pedidos >= 20 bultos.
+                PESTAÑA 2: CIERRE Y ARQUEO DIARIO
+                • Consolida los bultos entregados y la facturación de la jornada.
+                • Ingrese el Efectivo Real Contado en mano: el sistema calcula
+                  inmediatamente si la caja está cuadrada o si existe desvío.
+                • Segrega automáticamente el SOBRE PARA FRIGORÍFICO (Fondo de
+                  reposición intocable para pagar a Soychú/Tres Arroyos) del
+                  MARGEN NETO (ganancia real comercial del día).
+                • Presione [CERRAR ARQUEO Y GUARDAR JORNADA] para asentar el cierre.
                 
-                PASO 3: CONFIRMAR Y EMITIR REMITO
-                • Verifique el TOTAL REMITO en el display inferior.
-                • Presione el botón grande [💾 CONFIRMAR Y EMITIR REMITO].
-                • Si el cliente supera su crédito, el sistema le consultará si
-                  desea registrar la excepción con autorización en ruta.
+                PESTAÑA 3: CUENTAS CORRIENTES Y LIBRO MAYOR
+                • Seleccione cualquier cliente para consultar su extracto histórico.
+                • Visualice cada comprobante cronológico: Remitos (Debe), Recibos (Haber)
+                  y el saldo acumulado en tiempo real.
+                • Permite registrar cobranzas directas a cuenta corriente.
                 
                 ATAJOS DE TECLADO:
                 • [F5] Refrescar todos los datos.
-                • [Ctrl/Cmd + 1] Ir a Emisión de Remitos.
-                • [Ctrl/Cmd + 2] Ir a Monitor de Cuentas Corrientes.
-                • [Ctrl/Cmd + 3] Ir a Inventario de Depósito.
+                • [Ctrl/Cmd + 1] Parada en Ruta.
+                • [Ctrl/Cmd + 2] Cierre y Arqueo Diario.
+                • [Ctrl/Cmd + 3] Cuentas Corrientes y Extracto.
+                • [Ctrl/Cmd + 4] Catálogo de Bultos.
                 """;
 
-        JTextArea ta = new JTextArea(guia, 20, 60);
+        JTextArea ta = new JTextArea(guia, 22, 62);
         ta.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         ta.setEditable(false);
         JOptionPane.showMessageDialog(this, new JScrollPane(ta), "Guía Operativa para el Repartidor", JOptionPane.INFORMATION_MESSAGE);
@@ -637,7 +486,7 @@ public class MainFrame extends JFrame {
                 Arquitectura de Software:
                 • POO Java 17 con encapsulamiento, invariantes de dominio y polimorfismo.
                 • Desacoplamiento de capas (Model, DAO, Service, UI Swing).
-                • Algoritmos explícitos: MergeSort O(n log n) y Búsqueda Binaria O(log n).
+                • Algoritmos: MergeSort O(n log n) y Búsqueda Binaria O(log n).
                 • Transacciones atómicas ACID (JDBC) y snapshots inmutables de precios.
                 • Cobertura completa de pruebas unitarias JUnit 5.
                 """;

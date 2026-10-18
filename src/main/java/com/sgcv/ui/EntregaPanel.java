@@ -5,8 +5,11 @@ import com.sgcv.exception.StockInsuficienteException;
 import com.sgcv.exception.ValidacionException;
 import com.sgcv.model.Articulo;
 import com.sgcv.model.Cliente;
+import com.sgcv.model.Cobranza;
+import com.sgcv.model.DetalleCobranza;
 import com.sgcv.model.DetalleEntrega;
 import com.sgcv.model.Entrega;
+import com.sgcv.model.ParadaResult;
 import com.sgcv.service.ArticuloService;
 import com.sgcv.service.ClienteService;
 import com.sgcv.service.EntregaService;
@@ -18,585 +21,782 @@ import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
-import javax.swing.table.DefaultTableCellRenderer;
-import javax.swing.table.DefaultTableModel;
+import javax.swing.border.TitledBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 /**
- * Panel de captura operativa ultra-intuitivo para reparto en ruta (CU-01).
- * Optimizado para choferes y repartidores: botones grandes, filtros rápidos por zona,
- * tarjeta de estado crediticio interactiva y confirmación con snapshot de precios.
+ * Pantalla 1: Parada Comercial en Ruta (CU-01 + CU-02).
+ * Diseñada específicamente para reparto ágil en camioneta:
+ * - Selección rápida de cliente con filtro de zona.
+ * - Tarjeta en vivo del saldo deudor y crédito disponible.
+ * - Matriz táctil directa de los 6 bultos avícolas estándar con botones (+, -, +5).
+ * - Sección de cobranzas multi-medio (efectivo y transferencia).
+ * - Botón inteligente adaptativo (Remito, Recibo de Deuda, o Ambos).
  */
 public class EntregaPanel extends JPanel {
 
     private final IEntregaService entregaService;
     private final IClienteService clienteService;
     private final IArticuloService articuloService;
+    private final Runnable onDatosModificados;
 
-    // Datos en memoria
-    private List<Cliente> clientesCargados = new ArrayList<>();
-    private List<Articulo> articulosCargados = new ArrayList<>();
-    private Entrega entregaActual;
+    // Listas maestras
+    private List<Cliente> listaClientes = new ArrayList<>();
+    private List<Articulo> listaArticulos = new ArrayList<>();
+    private Cliente clienteSeleccionado;
 
-    // Componentes Paso 1: Cliente & Crédito
-    private JComboBox<String> comboZonas;
+    // Componentes Selección Cliente
+    private JComboBox<String> comboFiltroZona;
+    private JTextField txtBuscarCliente;
     private JComboBox<Cliente> comboClientes;
-    private JPanel panelCardCredito;
-    private JLabel lblCardCredito;
 
-    // Componentes Paso 2: Mercadería y Bultos
-    private JComboBox<Articulo> comboArticulos;
-    private JSpinner spinnerCantidad;
-    private JTable tablaItems;
-    private DefaultTableModel tableModel;
+    // Tarjeta Estado Crediticio
+    private JLabel lblRazonSocial;
+    private JLabel lblCuitDireccion;
+    private JLabel lblSaldoDeudorActual;
+    private JLabel lblLimiteCredito;
+    private JLabel lblCreditoDisponible;
+    private JLabel lblBadgeEstado;
 
-    // Componentes Paso 3: Totales y Emisión
-    private JLabel lblSubtotalBase;
-    private JLabel lblDescuentoBonif;
-    private JLabel lblTotalRemito;
-    private JButton btnConfirmar;
+    // Matriz de los 6 Artículos (Controles por artículo)
+    private final Map<Integer, ArticuloControl> articulosControles = new HashMap<>();
+    private JPanel panelMatrizBultos;
+
+    // Cobranza en la Parada
+    private JTextField txtCobroEfectivo;
+    private JTextField txtCobroTransferencia;
+    private JTextField txtRefTransferencia;
+
+    // Totales y Saldo Proyectado
+    private JLabel lblTotalBultos;
+    private JLabel lblTotalMercaderia;
+    private JLabel lblSaldoAnterior;
+    private JLabel lblTotalCobrado;
+    private JLabel lblNuevoSaldoFinal;
+
+    // Botón de Acción Inteligente
+    private JButton btnConfirmarParada;
+    private JButton btnLimpiarParada;
 
     public EntregaPanel() {
-        this(new EntregaService(), new ClienteService(), new ArticuloService());
+        this(new EntregaService(), new ClienteService(), new ArticuloService(), null);
     }
 
     public EntregaPanel(IEntregaService entregaService, IClienteService clienteService, IArticuloService articuloService) {
+        this(entregaService, clienteService, articuloService, null);
+    }
+
+    public EntregaPanel(IEntregaService entregaService, IClienteService clienteService, IArticuloService articuloService, Runnable onDatosModificados) {
         this.entregaService = entregaService;
         this.clienteService = clienteService;
         this.articuloService = articuloService;
-        this.entregaActual = new Entrega();
+        this.onDatosModificados = onDatosModificados;
 
         inicializarUI();
-        cargarDatosMaestros();
+        recargarDatosMaestros();
     }
 
     private void inicializarUI() {
         setLayout(new BorderLayout(0, 10));
-        setBorder(new EmptyBorder(10, 15, 15, 15));
+        setBorder(new EmptyBorder(10, 14, 12, 14));
+        setBackground(new Color(245, 247, 250));
 
-        // 1. Banner Superior de Encabezado
-        add(crearHeaderBanner(), BorderLayout.NORTH);
+        // 1. Norte: Selector de Cliente y Tarjeta de Cuenta Corriente
+        JPanel panelNorte = new JPanel(new BorderLayout(0, 8));
+        panelNorte.setOpaque(false);
+        panelNorte.add(crearBarraSeleccionCliente(), BorderLayout.NORTH);
+        panelNorte.add(crearTarjetaCrediticiaCliente(), BorderLayout.CENTER);
+        add(panelNorte, BorderLayout.NORTH);
 
-        // 2. Contenido Central (Paso 1, Paso 2 y Tabla)
-        JPanel panelCuerpo = new JPanel(new BorderLayout(0, 10));
-        panelCuerpo.add(crearPaso1ClientePanel(), BorderLayout.NORTH);
-        panelCuerpo.add(crearPaso2BultosPanel(), BorderLayout.CENTER);
-        add(panelCuerpo, BorderLayout.CENTER);
+        // 2. Centro: Matriz Directa de los 6 Bultos Estándar
+        add(crearPanelMatrizArticulos(), BorderLayout.CENTER);
 
-        // 3. Panel Inferior de Caja / Emisión (Paso 3)
-        add(crearPaso3EmisionPanel(), BorderLayout.SOUTH);
+        // 3. Sur: Panel de Cobranza, Totales y Botón Inteligente
+        add(crearPanelLiquidacionYAccion(), BorderLayout.SOUTH);
     }
 
-    /**
-     * Banner superior con estética visual clara y guía de tres pasos para el repartidor.
-     */
-    private JPanel crearHeaderBanner() {
-        JPanel banner = new JPanel(new BorderLayout(5, 3));
-        banner.setBackground(new Color(24, 43, 73));
-        banner.setBorder(new CompoundBorder(
-                new LineBorder(new Color(16, 29, 50), 1),
-                new EmptyBorder(10, 16, 10, 16)
+    // =========================================================================
+    // 1. Selector de Cliente y Tarjeta de Cuenta Corriente
+    // =========================================================================
+
+    private JPanel crearBarraSeleccionCliente() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        bar.setBackground(Color.WHITE);
+        bar.setBorder(new CompoundBorder(
+                new LineBorder(new Color(218, 224, 233), 1, true),
+                new EmptyBorder(4, 8, 4, 8)
         ));
 
-        JLabel lblTitulo = new JLabel("🚚 Registro Rápido en Reparto — Emisión de Remito y Cobranza en Ruta");
-        lblTitulo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
-        lblTitulo.setForeground(Color.WHITE);
+        bar.add(new JLabel("Zona:"));
+        comboFiltroZona = new JComboBox<>(new String[]{"Todas las Zonas", "Zona Oeste", "Zona Norte", "Zona Sur"});
+        comboFiltroZona.addActionListener(e -> filtrarClientes());
+        bar.add(comboFiltroZona);
 
-        JLabel lblPasos = new JLabel("Paso 1: Seleccionar Cliente y Zona  ➔  Paso 2: Cargar Bultos Cerrados  ➔  Paso 3: Confirmar y Emitir Remito");
-        lblPasos.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        lblPasos.setForeground(new Color(212, 228, 250));
+        bar.add(new JLabel("🔍 Buscar:"));
+        txtBuscarCliente = new JTextField(12);
+        txtBuscarCliente.setToolTipText("Filtrar por nombre o CUIT");
+        txtBuscarCliente.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { filtrarClientes(); }
+            @Override public void removeUpdate(DocumentEvent e) { filtrarClientes(); }
+            @Override public void changedUpdate(DocumentEvent e) { filtrarClientes(); }
+        });
+        bar.add(txtBuscarCliente);
 
-        banner.add(lblTitulo, BorderLayout.NORTH);
-        banner.add(lblPasos, BorderLayout.SOUTH);
-        return banner;
-    }
-
-    /**
-     * Paso 1: Selección ágil de cliente con filtro de zona y tarjeta de estado crediticio.
-     */
-    private JPanel crearPaso1ClientePanel() {
-        JPanel panelPaso1 = new JPanel(new BorderLayout(8, 8));
-        panelPaso1.setBorder(BorderFactory.createTitledBorder("Paso 1: Cliente y Control de Cuenta Corriente"));
-
-        // Fila de Filtro de Zona y Selector de Cliente
-        JPanel filaSeleccion = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
-
-        filaSeleccion.add(new JLabel("Zona:"));
-        comboZonas = new JComboBox<>(new String[]{"Todas las Zonas"});
-        comboZonas.setPreferredSize(new Dimension(160, 32));
-        comboZonas.addActionListener(e -> filtrarClientesPorZona());
-        filaSeleccion.add(comboZonas);
-
-        filaSeleccion.add(new JLabel("Cliente (Razón Social / CUIT):"));
+        bar.add(new JLabel("Cliente:"));
         comboClientes = new JComboBox<>();
-        comboClientes.setPreferredSize(new Dimension(420, 32));
+        comboClientes.setPreferredSize(new Dimension(320, 30));
         comboClientes.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Cliente c) {
-                    setText(c.getRazonSocial() + "  [CUIT: " + c.getCuit() + " | " + c.getZonaReparto() + "]");
+                    setText(String.format("%s (%s) [Debe: $%,.2f]", c.getRazonSocial(), c.getZonaReparto(), c.getSaldoCuentaCorriente()));
                 }
                 return this;
             }
         });
-        comboClientes.addActionListener(e -> actualizarCardCredito());
-        filaSeleccion.add(comboClientes);
+        comboClientes.addActionListener(e -> onClienteCambiado());
+        bar.add(comboClientes);
 
-        JButton btnRefrescar = new JButton("🔄 Refrescar");
-        btnRefrescar.setPreferredSize(new Dimension(110, 32));
-        btnRefrescar.addActionListener(e -> cargarDatosMaestros());
-        filaSeleccion.add(btnRefrescar);
+        JButton btnActualizar = new JButton("🔄 Recargar");
+        btnActualizar.addActionListener(e -> recargarDatosMaestros());
+        bar.add(btnActualizar);
 
-        panelPaso1.add(filaSeleccion, BorderLayout.NORTH);
+        return bar;
+    }
 
-        // Tarjeta Interactiva de Estado Crediticio
-        panelCardCredito = new JPanel(new BorderLayout());
-        panelCardCredito.setBorder(new CompoundBorder(
-                new LineBorder(new Color(40, 167, 69), 1, true),
-                new EmptyBorder(8, 14, 8, 14)
+    private JPanel crearTarjetaCrediticiaCliente() {
+        JPanel card = new JPanel(new BorderLayout(12, 0));
+        card.setBackground(Color.WHITE);
+        card.setBorder(new CompoundBorder(
+                new LineBorder(new Color(205, 215, 225), 1, true),
+                new EmptyBorder(10, 14, 10, 14)
         ));
-        panelCardCredito.setBackground(new Color(236, 253, 243));
 
-        lblCardCredito = new JLabel("Cargando estado crediticio...");
-        lblCardCredito.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        panelCardCredito.add(lblCardCredito, BorderLayout.CENTER);
+        // Info General (Izquierda)
+        JPanel pInfo = new JPanel(new GridLayout(2, 1, 0, 3));
+        pInfo.setOpaque(false);
 
-        panelPaso1.add(panelCardCredito, BorderLayout.SOUTH);
-        return panelPaso1;
+        lblRazonSocial = new JLabel("Seleccione un cliente para iniciar la parada");
+        lblRazonSocial.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+        lblRazonSocial.setForeground(new Color(18, 38, 58));
+
+        lblCuitDireccion = new JLabel("CUIT: - | Dirección: -");
+        lblCuitDireccion.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        lblCuitDireccion.setForeground(new Color(100, 110, 125));
+
+        pInfo.add(lblRazonSocial);
+        pInfo.add(lblCuitDireccion);
+        card.add(pInfo, BorderLayout.WEST);
+
+        // Indicadores Financieros (Derecha)
+        JPanel pFinanciero = new JPanel(new GridLayout(1, 4, 10, 0));
+        pFinanciero.setOpaque(false);
+
+        lblSaldoDeudorActual = new JLabel("$0.00", SwingConstants.CENTER);
+        lblLimiteCredito = new JLabel("$0.00", SwingConstants.CENTER);
+        lblCreditoDisponible = new JLabel("$0.00", SwingConstants.CENTER);
+        lblBadgeEstado = new JLabel("AL DÍA", SwingConstants.CENTER);
+
+        pFinanciero.add(crearMiniBadge("DEUDA ACTUAL", lblSaldoDeudorActual, new Color(180, 40, 20)));
+        pFinanciero.add(crearMiniBadge("LÍMITE CRÉDITO", lblLimiteCredito, new Color(50, 70, 95)));
+        pFinanciero.add(crearMiniBadge("DISPONIBLE", lblCreditoDisponible, new Color(25, 120, 50)));
+        pFinanciero.add(crearMiniBadge("ESTADO CUENTA", lblBadgeEstado, new Color(24, 43, 73)));
+
+        card.add(pFinanciero, BorderLayout.CENTER);
+        return card;
+    }
+
+    private JPanel crearMiniBadge(String titulo, JLabel lblValor, Color color) {
+        JPanel p = new JPanel(new BorderLayout(0, 2));
+        p.setOpaque(false);
+
+        JLabel lblT = new JLabel(titulo, SwingConstants.CENTER);
+        lblT.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 10));
+        lblT.setForeground(new Color(110, 120, 135));
+
+        lblValor.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        lblValor.setForeground(color);
+
+        p.add(lblT, BorderLayout.NORTH);
+        p.add(lblValor, BorderLayout.CENTER);
+        return p;
+    }
+
+    // =========================================================================
+    // 2. Matriz Directa de los 6 Bultos Estándar
+    // =========================================================================
+
+    private JPanel crearPanelMatrizArticulos() {
+        JPanel panel = new JPanel(new BorderLayout(0, 6));
+        panel.setOpaque(false);
+
+        JLabel lblTit = new JLabel("📦 Carga Directa de Bultos en Camioneta (Catálogo Estándar SGCV)");
+        lblTit.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        lblTit.setForeground(new Color(20, 35, 60));
+        panel.add(lblTit, BorderLayout.NORTH);
+
+        panelMatrizBultos = new JPanel(new GridLayout(2, 3, 10, 10));
+        panelMatrizBultos.setOpaque(false);
+
+        JScrollPane scroll = new JScrollPane(panelMatrizBultos);
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        panel.add(scroll, BorderLayout.CENTER);
+
+        return panel;
+    }
+
+    private void construirTarjetasArticulos() {
+        panelMatrizBultos.removeAll();
+        articulosControles.clear();
+
+        for (Articulo art : listaArticulos) {
+            ArticuloControl ctrl = new ArticuloControl(art);
+            articulosControles.put(art.getIdArticulo(), ctrl);
+            panelMatrizBultos.add(ctrl.panel);
+        }
+
+        panelMatrizBultos.revalidate();
+        panelMatrizBultos.repaint();
     }
 
     /**
-     * Paso 2: Carga rápida de mercadería con botones de incremento (+1, +5, +10) y tabla.
+     * Componente encapsulado para la tarjeta interactiva de cada uno de los 6 bultos.
      */
-    private JPanel crearPaso2BultosPanel() {
-        JPanel panelPaso2 = new JPanel(new BorderLayout(8, 8));
-        panelPaso2.setBorder(BorderFactory.createTitledBorder("Paso 2: Carga Rápida de Bultos Cerrados y Lista del Remito"));
+    private class ArticuloControl {
+        final Articulo articulo;
+        final JPanel panel;
+        final JTextField txtCantidad;
+        final JLabel lblSubtotal;
+        final JLabel lblStockInfo;
+        int cantidad = 0;
 
-        // Barra de inserción rápida
-        JPanel filaAgregar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        ArticuloControl(Articulo art) {
+            this.articulo = art;
+            this.panel = new JPanel(new BorderLayout(0, 6));
+            this.panel.setBackground(Color.WHITE);
+            this.panel.setBorder(new CompoundBorder(
+                    new LineBorder(new Color(210, 220, 230), 1, true),
+                    new EmptyBorder(8, 10, 8, 10)
+            ));
 
-        filaAgregar.add(new JLabel("Artículo:"));
-        comboArticulos = new JComboBox<>();
-        comboArticulos.setPreferredSize(new Dimension(380, 32));
-        comboArticulos.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof Articulo a) {
-                    setText(a.getCodigo() + " - " + a.getDescripcion() + " [Stock: " + a.getStockDeposito() + "] ($" + a.getPrecioVentaBase() + ")");
+            // Encabezado del Producto
+            JPanel pHead = new JPanel(new BorderLayout(0, 2));
+            pHead.setOpaque(false);
+
+            JLabel lblCodigo = new JLabel(art.getCodigo());
+            lblCodigo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+            lblCodigo.setForeground(new Color(15, 60, 130));
+
+            JLabel lblNombre = new JLabel(art.getDescripcion());
+            lblNombre.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+            lblNombre.setToolTipText(art.getDescripcion());
+
+            lblStockInfo = new JLabel(String.format("Precio: $%,.2f | Stock: %d bultos",
+                    art.getPrecioVentaBase(), art.getStockDeposito()));
+            lblStockInfo.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+            lblStockInfo.setForeground(art.getStockDeposito() < art.getStockMinimoAlerta() ? new Color(190, 30, 20) : new Color(70, 80, 95));
+
+            pHead.add(lblCodigo, BorderLayout.NORTH);
+            pHead.add(lblNombre, BorderLayout.CENTER);
+            pHead.add(lblStockInfo, BorderLayout.SOUTH);
+            panel.add(pHead, BorderLayout.NORTH);
+
+            // Controles de Selección Numérica
+            JPanel pControles = new JPanel(new FlowLayout(FlowLayout.CENTER, 6, 2));
+            pControles.setOpaque(false);
+
+            JButton btnMenos = new JButton("-");
+            btnMenos.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            btnMenos.setPreferredSize(new Dimension(38, 32));
+            btnMenos.addActionListener(e -> modificarCantidad(-1));
+            pControles.add(btnMenos);
+
+            txtCantidad = new JTextField("0", 3);
+            txtCantidad.setHorizontalAlignment(SwingConstants.CENTER);
+            txtCantidad.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            txtCantidad.addFocusListener(new FocusAdapter() {
+                @Override public void focusGained(FocusEvent e) { txtCantidad.selectAll(); }
+                @Override public void focusLost(FocusEvent e) { parsearTextoCantidad(); }
+            });
+            txtCantidad.getDocument().addDocumentListener(new DocumentListener() {
+                @Override public void insertUpdate(DocumentEvent e) { parsearTextoCantidad(); }
+                @Override public void removeUpdate(DocumentEvent e) { parsearTextoCantidad(); }
+                @Override public void changedUpdate(DocumentEvent e) { parsearTextoCantidad(); }
+            });
+            pControles.add(txtCantidad);
+
+            JButton btnMas = new JButton("+");
+            btnMas.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+            btnMas.setPreferredSize(new Dimension(38, 32));
+            btnMas.addActionListener(e -> modificarCantidad(1));
+            pControles.add(btnMas);
+
+            JButton btnMas5 = new JButton("+5");
+            btnMas5.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+            btnMas5.setPreferredSize(new Dimension(46, 32));
+            btnMas5.setToolTipText("Sumar 5 bultos rápidamente");
+            btnMas5.addActionListener(e -> modificarCantidad(5));
+            pControles.add(btnMas5);
+
+            panel.add(pControles, BorderLayout.CENTER);
+
+            // Pie: Subtotal en tiempo real
+            JPanel pPie = new JPanel(new BorderLayout());
+            pPie.setOpaque(false);
+
+            lblSubtotal = new JLabel("$0.00", SwingConstants.RIGHT);
+            lblSubtotal.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+            lblSubtotal.setForeground(new Color(20, 40, 80));
+
+            JButton btnCero = new JButton("Limpiar");
+            btnCero.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 10));
+            btnCero.setMargin(new Insets(1, 4, 1, 4));
+            btnCero.addActionListener(e -> setCantidad(0));
+
+            pPie.add(btnCero, BorderLayout.WEST);
+            pPie.add(lblSubtotal, BorderLayout.EAST);
+            panel.add(pPie, BorderLayout.SOUTH);
+        }
+
+        void modificarCantidad(int delta) {
+            int nueva = Math.max(0, cantidad + delta);
+            if (nueva > articulo.getStockDeposito()) {
+                JOptionPane.showMessageDialog(EntregaPanel.this,
+                        String.format("Stock insuficiente en camioneta para '%s'.\nStock disponible: %d bultos.",
+                                articulo.getDescripcion(), articulo.getStockDeposito()),
+                        "Límite de Stock", JOptionPane.WARNING_MESSAGE);
+                nueva = articulo.getStockDeposito();
+            }
+            setCantidad(nueva);
+        }
+
+        void parsearTextoCantidad() {
+            String texto = txtCantidad.getText().trim();
+            if (texto.isEmpty()) return;
+            try {
+                int valor = Integer.parseInt(texto);
+                if (valor < 0) valor = 0;
+                if (valor > articulo.getStockDeposito()) {
+                    valor = articulo.getStockDeposito();
                 }
-                return this;
-            }
-        });
-        filaAgregar.add(comboArticulos);
-
-        filaAgregar.add(new JLabel("Cantidad:"));
-        spinnerCantidad = new JSpinner(new SpinnerNumberModel(1, 1, 999, 1));
-        spinnerCantidad.setPreferredSize(new Dimension(75, 32));
-        spinnerCantidad.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        filaAgregar.add(spinnerCantidad);
-
-        // Botones de incremento rápido para el repartidor
-        JButton btnMas1 = new JButton("+1");
-        btnMas1.setPreferredSize(new Dimension(48, 32));
-        btnMas1.addActionListener(e -> incrementarSpinner(1));
-        filaAgregar.add(btnMas1);
-
-        JButton btnMas5 = new JButton("+5");
-        btnMas5.setPreferredSize(new Dimension(52, 32));
-        btnMas5.addActionListener(e -> incrementarSpinner(5));
-        filaAgregar.add(btnMas5);
-
-        JButton btnMas10 = new JButton("+10");
-        btnMas10.setPreferredSize(new Dimension(58, 32));
-        btnMas10.addActionListener(e -> incrementarSpinner(10));
-        filaAgregar.add(btnMas10);
-
-        JButton btnAgregar = new JButton("➕ Agregar al Remito");
-        btnAgregar.setPreferredSize(new Dimension(175, 32));
-        btnAgregar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        btnAgregar.setBackground(new Color(28, 88, 160));
-        btnAgregar.setForeground(Color.WHITE);
-        btnAgregar.addActionListener(e -> agregarItem());
-        filaAgregar.add(btnAgregar);
-
-        panelPaso2.add(filaAgregar, BorderLayout.NORTH);
-
-        // Tabla de Renglones cargados
-        String[] columnas = {"#", "Código", "Descripción", "Tipo", "Bultos", "Precio Unit.", "Subtotal"};
-        tableModel = new DefaultTableModel(columnas, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) { return false; }
-        };
-        tablaItems = new JTable(tableModel);
-        tablaItems.setRowHeight(30);
-        tablaItems.setAutoCreateRowSorter(true);
-        tablaItems.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        tablaItems.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-
-        // Ajuste de anchos de columna
-        tablaItems.getColumnModel().getColumn(0).setPreferredWidth(35);
-        tablaItems.getColumnModel().getColumn(1).setPreferredWidth(100);
-        tablaItems.getColumnModel().getColumn(2).setPreferredWidth(260);
-        tablaItems.getColumnModel().getColumn(3).setPreferredWidth(180);
-        tablaItems.getColumnModel().getColumn(4).setPreferredWidth(70);
-        tablaItems.getColumnModel().getColumn(5).setPreferredWidth(100);
-        tablaItems.getColumnModel().getColumn(6).setPreferredWidth(110);
-
-        // Alineación derecha para importes y cantidades
-        DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
-        rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
-        tablaItems.getColumnModel().getColumn(4).setCellRenderer(rightRenderer);
-        tablaItems.getColumnModel().getColumn(5).setCellRenderer(rightRenderer);
-        tablaItems.getColumnModel().getColumn(6).setCellRenderer(rightRenderer);
-
-        JScrollPane scrollPane = new JScrollPane(tablaItems);
-        scrollPane.setPreferredSize(new Dimension(750, 180));
-        panelPaso2.add(scrollPane, BorderLayout.CENTER);
-
-        // Barra de acciones sobre la tabla (quitar renglón, vaciar)
-        JPanel barraTablaAcciones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 4));
-        JButton btnQuitar = new JButton("🗑️ Quitar Renglón");
-        btnQuitar.addActionListener(e -> quitarItemSeleccionado());
-        barraTablaAcciones.add(btnQuitar);
-
-        JButton btnVaciar = new JButton("❌ Vaciar Remito");
-        btnVaciar.addActionListener(e -> vaciarRemito());
-        barraTablaAcciones.add(btnVaciar);
-
-        panelPaso2.add(barraTablaAcciones, BorderLayout.SOUTH);
-        return panelPaso2;
-    }
-
-    /**
-     * Paso 3: Consolidación de totales en display estilo caja registradora y botón prominente de emisión.
-     */
-    private JPanel crearPaso3EmisionPanel() {
-        JPanel panelPaso3 = new JPanel(new BorderLayout(15, 8));
-        panelPaso3.setBorder(BorderFactory.createTitledBorder("Paso 3: Liquidación de Importes y Emisión Oficial"));
-
-        // Display de Totales (Subtotal base, Bonificación polimórfica, Total Neto)
-        JPanel panelDisplayTotales = new JPanel(new GridLayout(3, 1, 4, 4));
-        panelDisplayTotales.setBorder(new CompoundBorder(
-                new LineBorder(new Color(200, 215, 230), 1),
-                new EmptyBorder(8, 16, 8, 16)
-        ));
-        panelDisplayTotales.setBackground(new Color(246, 249, 252));
-
-        lblSubtotalBase = new JLabel("Subtotal Lista: $0.00");
-        lblSubtotalBase.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
-        lblSubtotalBase.setForeground(new Color(80, 90, 105));
-
-        lblDescuentoBonif = new JLabel("Descuento por Volumen: $0.00");
-        lblDescuentoBonif.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
-        lblDescuentoBonif.setForeground(new Color(30, 130, 60));
-
-        lblTotalRemito = new JLabel("TOTAL REMITO: $0.00");
-        lblTotalRemito.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 20));
-        lblTotalRemito.setForeground(new Color(14, 40, 75));
-
-        panelDisplayTotales.add(lblSubtotalBase);
-        panelDisplayTotales.add(lblDescuentoBonif);
-        panelDisplayTotales.add(lblTotalRemito);
-
-        panelPaso3.add(panelDisplayTotales, BorderLayout.CENTER);
-
-        // Botón gigante para confirmación por chofer en pantalla táctil o mouse
-        btnConfirmar = new JButton("💾 CONFIRMAR Y EMITIR REMITO");
-        btnConfirmar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
-        btnConfirmar.setPreferredSize(new Dimension(320, 52));
-        btnConfirmar.setBackground(new Color(34, 139, 34));
-        btnConfirmar.setForeground(Color.WHITE);
-        btnConfirmar.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnConfirmar.addActionListener(e -> confirmarEntrega());
-
-        JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
-        panelBoton.add(btnConfirmar);
-        panelPaso3.add(panelBoton, BorderLayout.EAST);
-
-        return panelPaso3;
-    }
-
-    private void incrementarSpinner(int delta) {
-        int actual = (Integer) spinnerCantidad.getValue();
-        spinnerCantidad.setValue(Math.min(actual + delta, 999));
-    }
-
-    public void cargarDatosMaestros() {
-        try {
-            clientesCargados = clienteService.listarActivos();
-            articulosCargados = articuloService.listarDisponibles();
-
-            // Población de zonas únicas
-            Set<String> zonas = new LinkedHashSet<>();
-            zonas.add("Todas las Zonas");
-            for (Cliente c : clientesCargados) {
-                if (c.getZonaReparto() != null && !c.getZonaReparto().isBlank()) {
-                    zonas.add(c.getZonaReparto());
+                if (valor != cantidad) {
+                    cantidad = valor;
+                    actualizarSubtotal();
+                    recalcularParada();
                 }
+            } catch (NumberFormatException ignored) {}
+        }
+
+        void setCantidad(int val) {
+            this.cantidad = Math.max(0, Math.min(val, articulo.getStockDeposito()));
+            this.txtCantidad.setText(String.valueOf(this.cantidad));
+            actualizarSubtotal();
+            recalcularParada();
+        }
+
+        void actualizarSubtotal() {
+            if (cantidad == 0) {
+                lblSubtotal.setText("$0.00");
+                lblSubtotal.setForeground(Color.GRAY);
+                panel.setBorder(new CompoundBorder(
+                        new LineBorder(new Color(210, 220, 230), 1, true),
+                        new EmptyBorder(8, 10, 8, 10)
+                ));
+            } else {
+                BigDecimal precioUnit = articulo.calcularPrecioVentaFinal(cantidad);
+                BigDecimal sub = precioUnit.multiply(BigDecimal.valueOf(cantidad));
+                lblSubtotal.setText(String.format("$%,.2f", sub));
+                lblSubtotal.setForeground(new Color(20, 90, 40));
+                panel.setBorder(new CompoundBorder(
+                        new LineBorder(new Color(30, 130, 60), 2, true),
+                        new EmptyBorder(7, 9, 7, 9)
+                ));
             }
+        }
 
-            comboZonas.removeAllItems();
-            for (String z : zonas) {
-                comboZonas.addItem(z);
-            }
-
-            filtrarClientesPorZona();
-
-            comboArticulos.removeAllItems();
-            for (Articulo a : articulosCargados) {
-                comboArticulos.addItem(a);
-            }
-
-            actualizarCardCredito();
-        } catch (SQLException e) {
-            JOptionPane.showMessageDialog(this,
-                    "Error conectando con la base de datos MySQL:\n" + e.getMessage(),
-                    "Error de Conectividad", JOptionPane.ERROR_MESSAGE);
+        BigDecimal getSubtotal() {
+            if (cantidad <= 0) return BigDecimal.ZERO;
+            BigDecimal precioUnit = articulo.calcularPrecioVentaFinal(cantidad);
+            return precioUnit.multiply(BigDecimal.valueOf(cantidad));
         }
     }
 
-    private void filtrarClientesPorZona() {
-        String zonaSeleccionada = (String) comboZonas.getSelectedItem();
-        comboClientes.removeAllItems();
+    // =========================================================================
+    // 3. Panel de Cobranza, Totales y Botón Inteligente
+    // =========================================================================
 
-        for (Cliente c : clientesCargados) {
-            if (zonaSeleccionada == null || "Todas las Zonas".equals(zonaSeleccionada)
-                    || zonaSeleccionada.equalsIgnoreCase(c.getZonaReparto())) {
+    private JPanel crearPanelLiquidacionYAccion() {
+        JPanel panel = new JPanel(new BorderLayout(14, 0));
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(new CompoundBorder(
+                new LineBorder(new Color(205, 215, 225), 1, true),
+                new EmptyBorder(10, 14, 10, 14)
+        ));
+
+        // A. Izquierda: Cobranza en la Parada (Multi-Medio)
+        JPanel pCobranza = new JPanel(new GridLayout(3, 2, 8, 6));
+        pCobranza.setOpaque(false);
+        pCobranza.setPreferredSize(new Dimension(380, 0));
+        pCobranza.setBorder(new TitledBorder(new LineBorder(new Color(220, 225, 235), 1),
+                "💵 Cobranza en Parada (Multi-Medio)", TitledBorder.LEFT, TitledBorder.TOP,
+                new Font(Font.SANS_SERIF, Font.BOLD, 12), new Color(20, 40, 80)));
+
+        pCobranza.add(new JLabel("Efectivo Recibido ($):"));
+        txtCobroEfectivo = new JTextField("0.00");
+        txtCobroEfectivo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        txtCobroEfectivo.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtCobroEfectivo.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { recalcularParada(); }
+            @Override public void removeUpdate(DocumentEvent e) { recalcularParada(); }
+            @Override public void changedUpdate(DocumentEvent e) { recalcularParada(); }
+        });
+        pCobranza.add(txtCobroEfectivo);
+
+        pCobranza.add(new JLabel("Transferencia Recibida ($):"));
+        txtCobroTransferencia = new JTextField("0.00");
+        txtCobroTransferencia.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        txtCobroTransferencia.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtCobroTransferencia.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { recalcularParada(); }
+            @Override public void removeUpdate(DocumentEvent e) { recalcularParada(); }
+            @Override public void changedUpdate(DocumentEvent e) { recalcularParada(); }
+        });
+        pCobranza.add(txtCobroTransferencia);
+
+        pCobranza.add(new JLabel("N° Operación / Referencia:"));
+        txtRefTransferencia = new JTextField();
+        pCobranza.add(txtRefTransferencia);
+
+        panel.add(pCobranza, BorderLayout.WEST);
+
+        // B. Centro: Resumen y Proyección del Saldo
+        JPanel pTotales = new JPanel(new GridLayout(5, 2, 8, 4));
+        pTotales.setOpaque(false);
+
+        lblTotalBultos = new JLabel("0 cajones", SwingConstants.RIGHT);
+        lblTotalMercaderia = new JLabel("$0.00", SwingConstants.RIGHT);
+        lblSaldoAnterior = new JLabel("$0.00", SwingConstants.RIGHT);
+        lblTotalCobrado = new JLabel("$0.00", SwingConstants.RIGHT);
+        lblNuevoSaldoFinal = new JLabel("$0.00", SwingConstants.RIGHT);
+
+        lblTotalBultos.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        lblTotalMercaderia.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        lblSaldoAnterior.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        lblTotalCobrado.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        lblTotalCobrado.setForeground(new Color(25, 125, 50));
+        lblNuevoSaldoFinal.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
+
+        pTotales.add(new JLabel("Bultos a Entregar:"));
+        pTotales.add(lblTotalBultos);
+
+        pTotales.add(new JLabel("Mercadería de Hoy:"));
+        pTotales.add(lblTotalMercaderia);
+
+        pTotales.add(new JLabel("Deuda Anterior:"));
+        pTotales.add(lblSaldoAnterior);
+
+        pTotales.add(new JLabel("Cobranza Percibida:"));
+        pTotales.add(lblTotalCobrado);
+
+        pTotales.add(new JLabel("Nuevo Saldo Deudor:"));
+        pTotales.add(lblNuevoSaldoFinal);
+
+        panel.add(pTotales, BorderLayout.CENTER);
+
+        // C. Derecha: Botón de Confirmación Inteligente
+        JPanel pAccion = new JPanel(new GridLayout(2, 1, 0, 8));
+        pAccion.setOpaque(false);
+        pAccion.setPreferredSize(new Dimension(280, 0));
+
+        btnConfirmarParada = new JButton("Seleccione bultos o cobro");
+        btnConfirmarParada.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        btnConfirmarParada.setEnabled(false);
+        btnConfirmarParada.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnConfirmarParada.addActionListener(e -> confirmarParadaComercial());
+        pAccion.add(btnConfirmarParada);
+
+        btnLimpiarParada = new JButton("🔄 Limpiar Parada");
+        btnLimpiarParada.addActionListener(e -> limpiarCamposParada());
+        pAccion.add(btnLimpiarParada);
+
+        panel.add(pAccion, BorderLayout.EAST);
+        return panel;
+    }
+
+    // =========================================================================
+    // Lógica Operativa y Recálculos en Tiempo Real
+    // =========================================================================
+
+    public void recargarDatosMaestros() {
+        try {
+            listaClientes = clienteService.listarActivos();
+            listaArticulos = articuloService.listarDisponibles();
+
+            filtrarClientes();
+            construirTarjetasArticulos();
+            recalcularParada();
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error de conexión al cargar datos maestros: " + ex.getMessage(),
+                    "Error de Conexión", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void filtrarClientes() {
+        String zona = (String) comboFiltroZona.getSelectedItem();
+        String filtro = txtBuscarCliente != null ? txtBuscarCliente.getText().trim().toLowerCase() : "";
+
+        comboClientes.removeAllItems();
+        for (Cliente c : listaClientes) {
+            boolean coincideZona = zona == null || "Todas las Zonas".equals(zona) || zona.equalsIgnoreCase(c.getZonaReparto());
+            boolean coincideTexto = filtro.isEmpty() || c.getRazonSocial().toLowerCase().contains(filtro) || c.getCuit().contains(filtro);
+
+            if (coincideZona && coincideTexto) {
                 comboClientes.addItem(c);
             }
         }
-        actualizarCardCredito();
-    }
 
-    private void actualizarCardCredito() {
-        Cliente cli = (Cliente) comboClientes.getSelectedItem();
-        if (cli == null) {
-            lblCardCredito.setText("Seleccione un cliente para evaluar su margen crediticio.");
-            panelCardCredito.setBackground(new Color(245, 245, 245));
-            panelCardCredito.setBorder(new LineBorder(Color.LIGHT_GRAY, 1, true));
-            return;
-        }
-
-        BigDecimal saldo = cli.getSaldoCuentaCorriente();
-        BigDecimal limite = cli.getLimiteCredito();
-        BigDecimal adicionalEstimado = entregaActual.getTotalEntrega();
-        boolean excedido = cli.estaExcedido(adicionalEstimado);
-
-        if (excedido) {
-            BigDecimal exceso = saldo.add(adicionalEstimado).subtract(limite).max(BigDecimal.ZERO);
-            panelCardCredito.setBackground(new Color(254, 242, 242));
-            panelCardCredito.setBorder(new CompoundBorder(
-                    new LineBorder(new Color(220, 53, 69), 1, true),
-                    new EmptyBorder(8, 14, 8, 14)
-            ));
-            lblCardCredito.setText(String.format(
-                    "<html><b style='color:#b71c1c;'>⚠️ ALERTA: LÍMITE DE CRÉDITO EXCEDIDO</b> &nbsp;|&nbsp; " +
-                    "Saldo Deudor: <b>$%s</b> &nbsp;|&nbsp; Límite Autorizado: <b>$%s</b> &nbsp;|&nbsp; " +
-                    "<span style='color:#b71c1c;'><b>Exceso Proyectado: $%s</b></span></html>",
-                    saldo, limite, exceso
-            ));
+        if (comboClientes.getItemCount() > 0) {
+            comboClientes.setSelectedIndex(0);
         } else {
-            BigDecimal disponible = limite.subtract(saldo.add(adicionalEstimado)).max(BigDecimal.ZERO);
-            panelCardCredito.setBackground(new Color(236, 253, 243));
-            panelCardCredito.setBorder(new CompoundBorder(
-                    new LineBorder(new Color(40, 167, 69), 1, true),
-                    new EmptyBorder(8, 14, 8, 14)
-            ));
-            lblCardCredito.setText(String.format(
-                    "<html><b style='color:#155724;'>✅ CLIENTE HABILITADO PARA DESPACHO</b> &nbsp;|&nbsp; " +
-                    "Saldo Deudor: <b>$%s</b> &nbsp;|&nbsp; Límite: <b>$%s</b> &nbsp;|&nbsp; " +
-                    "<span style='color:#155724;'><b>Margen Disponible: $%s</b></span></html>",
-                    saldo, limite, disponible
-            ));
+            clienteSeleccionado = null;
+            actualizarTarjetaCliente(null);
         }
     }
 
-    private void agregarItem() {
-        Articulo art = (Articulo) comboArticulos.getSelectedItem();
-        int cant = (Integer) spinnerCantidad.getValue();
-        if (art == null) return;
+    private void onClienteCambiado() {
+        clienteSeleccionado = (Cliente) comboClientes.getSelectedItem();
+        actualizarTarjetaCliente(clienteSeleccionado);
+        recalcularParada();
+    }
 
-        if (!art.tieneStock(cant)) {
-            JOptionPane.showMessageDialog(this,
-                    "Stock físico insuficiente en el furgón térmico para: " + art.getCodigo() +
-                    "\nDisponible en depósito: " + art.getStockDeposito() + " bultos. Solicitado: " + cant + " bultos.",
-                    "Alerta de Stock Físico", JOptionPane.WARNING_MESSAGE);
+    private void actualizarTarjetaCliente(Cliente c) {
+        if (c == null) {
+            lblRazonSocial.setText("Seleccione un cliente para iniciar la parada");
+            lblCuitDireccion.setText("CUIT: - | Dirección: -");
+            lblSaldoDeudorActual.setText("$0.00");
+            lblLimiteCredito.setText("$0.00");
+            lblCreditoDisponible.setText("$0.00");
+            lblBadgeEstado.setText("-");
+            lblSaldoAnterior.setText("$0.00");
             return;
         }
 
-        // Cálculo polimórfico del precio final (5% dto en ArticuloPromocional >= 10 bultos)
-        BigDecimal precioPolimorfico = art.calcularPrecioVentaFinal(cant);
-        DetalleEntrega det = new DetalleEntrega(
-                art.getIdArticulo(), art.getCodigo(), art.getDescripcion(),
-                cant, precioPolimorfico, art.getPrecioCostoReposicion(), BigDecimal.ZERO
-        );
-        entregaActual.agregarDetalle(det);
+        lblRazonSocial.setText(c.getRazonSocial());
+        lblCuitDireccion.setText(String.format("CUIT: %s | Zona: %s | Dirección: %s",
+                c.getCuit(), c.getZonaReparto(), c.getDireccion()));
 
-        int numeroRenglon = tableModel.getRowCount() + 1;
-        tableModel.addRow(new Object[]{
-                numeroRenglon, art.getCodigo(), art.getDescripcion(),
-                art.getTipoArticulo(), cant,
-                "$" + precioPolimorfico, "$" + det.getSubtotal()
-        });
+        lblSaldoDeudorActual.setText(String.format("$%,.2f", c.getSaldoCuentaCorriente()));
+        lblLimiteCredito.setText(String.format("$%,.2f", c.getLimiteCredito()));
 
-        // Resetear spinner a 1 para el siguiente artículo
-        spinnerCantidad.setValue(1);
+        BigDecimal disponible = c.calcularCreditoDisponible();
+        lblCreditoDisponible.setText(String.format("$%,.2f", disponible));
 
-        recalcularTotalesUI();
-        actualizarCardCredito();
+        if (c.estaExcedido(BigDecimal.ZERO)) {
+            lblBadgeEstado.setText("EXCEDIDO");
+            lblBadgeEstado.setForeground(new Color(200, 20, 20));
+        } else {
+            lblBadgeEstado.setText("AL DÍA");
+            lblBadgeEstado.setForeground(new Color(25, 130, 50));
+        }
+
+        lblSaldoAnterior.setText(String.format("$%,.2f", c.getSaldoCuentaCorriente()));
     }
 
-    private void quitarItemSeleccionado() {
-        int fila = tablaItems.getSelectedRow();
-        if (fila < 0) {
-            JOptionPane.showMessageDialog(this, "Seleccione un renglón de la tabla para eliminar.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+    private void recalcularParada() {
+        int totalBultos = 0;
+        BigDecimal totalMercaderia = BigDecimal.ZERO;
+
+        for (ArticuloControl ctrl : articulosControles.values()) {
+            totalBultos += ctrl.cantidad;
+            totalMercaderia = totalMercaderia.add(ctrl.getSubtotal());
+        }
+
+        lblTotalBultos.setText(totalBultos + " cajones");
+        lblTotalMercaderia.setText(String.format("$%,.2f", totalMercaderia));
+
+        BigDecimal cobroEfec = parseMonto(txtCobroEfectivo.getText());
+        BigDecimal cobroTransf = parseMonto(txtCobroTransferencia.getText());
+        BigDecimal totalCobrado = cobroEfec.add(cobroTransf);
+
+        lblTotalCobrado.setText(String.format("$%,.2f", totalCobrado));
+
+        BigDecimal saldoAnterior = clienteSeleccionado != null ? clienteSeleccionado.getSaldoCuentaCorriente() : BigDecimal.ZERO;
+        BigDecimal nuevoSaldo = saldoAnterior.add(totalMercaderia).subtract(totalCobrado);
+
+        lblNuevoSaldoFinal.setText(String.format("$%,.2f", nuevoSaldo));
+        if (clienteSeleccionado != null && nuevoSaldo.compareTo(clienteSeleccionado.getLimiteCredito()) > 0) {
+            lblNuevoSaldoFinal.setForeground(new Color(200, 20, 20));
+        } else {
+            lblNuevoSaldoFinal.setForeground(new Color(20, 40, 80));
+        }
+
+        // Configurar Botón Inteligente
+        boolean tieneBultos = totalBultos > 0;
+        boolean tieneCobro = totalCobrado.compareTo(BigDecimal.ZERO) > 0;
+
+        if (!tieneBultos && !tieneCobro) {
+            btnConfirmarParada.setEnabled(false);
+            btnConfirmarParada.setText("Seleccione bultos o cobro");
+            btnConfirmarParada.setBackground(UIManager.getColor("Button.background"));
+            btnConfirmarParada.setForeground(Color.GRAY);
+        } else if (tieneBultos && !tieneCobro) {
+            btnConfirmarParada.setEnabled(true);
+            btnConfirmarParada.setText(String.format("🚚 EMITIR REMITO ($%,.2f)", totalMercaderia));
+            btnConfirmarParada.setBackground(new Color(13, 71, 161)); // Azul
+            btnConfirmarParada.setForeground(Color.WHITE);
+        } else if (!tieneBultos && tieneCobro) {
+            btnConfirmarParada.setEnabled(true);
+            btnConfirmarParada.setText(String.format("💵 REGISTRAR PAGO ($%,.2f)", totalCobrado));
+            btnConfirmarParada.setBackground(new Color(27, 94, 32)); // Verde Esmeralda
+            btnConfirmarParada.setForeground(Color.WHITE);
+        } else {
+            btnConfirmarParada.setEnabled(true);
+            btnConfirmarParada.setText("🚚💵 CONFIRMAR ENTREGA Y COBRANZA");
+            btnConfirmarParada.setBackground(new Color(0, 77, 64)); // Teal Oscuro
+            btnConfirmarParada.setForeground(Color.WHITE);
+        }
+    }
+
+    private void confirmarParadaComercial() {
+        if (clienteSeleccionado == null) {
+            JOptionPane.showMessageDialog(this, "Debe seleccionar un cliente para operar.",
+                    "Validación", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        int modelRow = tablaItems.convertRowIndexToModel(fila);
-        tableModel.removeRow(modelRow);
 
-        // Reconstruir lista de entregaActual
-        entregaActual.getDetalles().remove(modelRow);
-        entregaActual.recalcularTotal();
+        int totalBultos = 0;
+        Entrega entrega = null;
 
-        // Renumerar columna #
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            tableModel.setValueAt(i + 1, i, 0);
-        }
-
-        recalcularTotalesUI();
-        actualizarCardCredito();
-    }
-
-    private void vaciarRemito() {
-        if (tableModel.getRowCount() == 0) return;
-        int resp = JOptionPane.showConfirmDialog(this,
-                "¿Está seguro de que desea vaciar todos los renglones cargados en este remito?",
-                "Confirmar Cancelación", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-        if (resp == JOptionPane.YES_OPTION) {
-            resetearRemito();
-        }
-    }
-
-    private void recalcularTotalesUI() {
-        BigDecimal subtotalLista = BigDecimal.ZERO;
-        for (DetalleEntrega det : entregaActual.getDetalles()) {
-            // Buscar precio de lista original
-            for (Articulo a : articulosCargados) {
-                if (a.getIdArticulo() == det.getIdArticulo()) {
-                    subtotalLista = subtotalLista.add(a.getPrecioVentaBase().multiply(BigDecimal.valueOf(det.getCantidadBultos())));
-                    break;
+        for (ArticuloControl ctrl : articulosControles.values()) {
+            if (ctrl.cantidad > 0) {
+                if (entrega == null) {
+                    entrega = new Entrega();
+                    entrega.setIdCliente(clienteSeleccionado.getIdCliente());
+                    entrega.setIdUsuario(1);
+                    entrega.setEstado("EMITIDA");
                 }
+                DetalleEntrega det = new DetalleEntrega(
+                        ctrl.articulo.getIdArticulo(),
+                        ctrl.cantidad,
+                        ctrl.articulo.calcularPrecioVentaFinal(ctrl.cantidad),
+                        ctrl.articulo.getPrecioCostoReposicion(),
+                        BigDecimal.ZERO
+                );
+                entrega.agregarDetalle(det);
+                totalBultos += ctrl.cantidad;
             }
         }
 
-        BigDecimal totalFacturado = entregaActual.getTotalEntrega();
-        BigDecimal bonificacionTotal = subtotalLista.subtract(totalFacturado);
+        BigDecimal cobroEfec = parseMonto(txtCobroEfectivo.getText());
+        BigDecimal cobroTransf = parseMonto(txtCobroTransferencia.getText());
+        BigDecimal totalCobrado = cobroEfec.add(cobroTransf);
 
-        lblSubtotalBase.setText("Subtotal Tarifa Lista: $" + subtotalLista.setScale(2, RoundingMode.HALF_UP));
+        Cobranza cobranza = null;
+        if (totalCobrado.compareTo(BigDecimal.ZERO) > 0) {
+            cobranza = new Cobranza();
+            cobranza.setIdCliente(clienteSeleccionado.getIdCliente());
+            cobranza.setIdUsuario(1);
+            cobranza.setMontoTotal(totalCobrado);
+            cobranza.setObservaciones("Cobranza percibida en parada comercial");
 
-        if (bonificacionTotal.compareTo(BigDecimal.ZERO) > 0) {
-            lblDescuentoBonif.setText("Descuento Promocional por Volumen: -$" + bonificacionTotal.setScale(2, RoundingMode.HALF_UP) + " (Ahorro Cliente)");
-            lblDescuentoBonif.setForeground(new Color(30, 130, 60));
-        } else {
-            lblDescuentoBonif.setText("Bonificación por Volumen: $0.00");
-            lblDescuentoBonif.setForeground(new Color(80, 90, 105));
+            if (cobroEfec.compareTo(BigDecimal.ZERO) > 0) {
+                cobranza.agregarDetalle(new DetalleCobranza("EFECTIVO", cobroEfec, "Cobro en camioneta"));
+            }
+            if (cobroTransf.compareTo(BigDecimal.ZERO) > 0) {
+                cobranza.agregarDetalle(new DetalleCobranza("TRANSFERENCIA", cobroTransf, txtRefTransferencia.getText().trim()));
+            }
         }
 
-        lblTotalRemito.setText("TOTAL REMITO: $" + totalFacturado.setScale(2, RoundingMode.HALF_UP));
-    }
-
-    private void confirmarEntrega() {
-        Cliente cli = (Cliente) comboClientes.getSelectedItem();
-        if (cli == null || entregaActual.getDetalles().isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Debe seleccionar un cliente y cargar al menos un artículo para emitir el remito oficial.",
-                    "Datos Incompletos", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        entregaActual.setIdCliente(cli.getIdCliente());
-        entregaActual.setIdUsuario(1);
-
+        // Validación de confirmación
+        boolean autorizarExcepcional = false;
         try {
-            boolean exito = entregaService.registrarEntrega(entregaActual);
-            if (exito) {
-                finalizarEmisionExitosa();
-            }
-        } catch (StockInsuficienteException sie) {
-            JOptionPane.showMessageDialog(this,
-                    sie.getMessage(),
-                    "Alerta de Stock Físico",
-                    JOptionPane.WARNING_MESSAGE);
-        } catch (LimiteCreditoExcedidoException lce) {
+            ParadaResult resultado = entregaService.registrarParadaCompleta(entrega, cobranza, false);
+            mostrarDialogoExito(resultado);
+            limpiarCamposParada();
+            recargarDatosMaestros();
+            if (onDatosModificados != null) onDatosModificados.run();
+
+        } catch (LimiteCreditoExcedidoException ex) {
             int resp = JOptionPane.showConfirmDialog(this,
-                    lce.getMessage() + "\n\n¿Desea autorizar excepcionalmente la entrega en ruta como supervisor?",
-                    "Alerta de Límite de Crédito",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.WARNING_MESSAGE);
+                    "⚠ ALERTA DE RIESGO CREDITICIO:\n\n" +
+                            ex.getMessage() + "\n\n" +
+                            "¿Desea autorizar excepcionalmente la entrega superando el límite?",
+                    "Autorización Excepcional de Crédito",
+                    JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
             if (resp == JOptionPane.YES_OPTION) {
-                entregaActual.setObservaciones("Entrega con exceso de crédito autorizada en ruta por chofer/supervisor.");
                 try {
-                    boolean exito = entregaService.registrarEntrega(entregaActual, true);
-                    if (exito) {
-                        finalizarEmisionExitosa();
+                    if (entrega != null) {
+                        entrega.setObservaciones("Entrega autorizada con exceso crediticio excepcional");
                     }
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this,
-                            "Error al autorizar remito excepcional: " + ex.getMessage(),
-                            "Error Transaccional", JOptionPane.ERROR_MESSAGE);
+                    ParadaResult resAutorizado = entregaService.registrarParadaCompleta(entrega, cobranza, true);
+                    mostrarDialogoExito(resAutorizado);
+                    limpiarCamposParada();
+                    recargarDatosMaestros();
+                    if (onDatosModificados != null) onDatosModificados.run();
+                } catch (Exception e2) {
+                    JOptionPane.showMessageDialog(this, "Error al registrar parada autorizada: " + e2.getMessage(),
+                            "Error de Persistencia", JOptionPane.ERROR_MESSAGE);
                 }
             }
-        } catch (ValidacionException ve) {
-            JOptionPane.showMessageDialog(this, ve.getMessage(),
-                    "Validación Operativa", JOptionPane.WARNING_MESSAGE);
-        } catch (Exception ex) {
+        } catch (StockInsuficienteException ex) {
             JOptionPane.showMessageDialog(this,
-                    "Error al confirmar entrega: " + ex.getMessage(),
-                    "Fallo de Persistencia", JOptionPane.ERROR_MESSAGE);
+                    String.format("Stock físico insuficiente para el artículo '%s'.\nStock disponible: %d bultos | Solicitado: %d bultos.",
+                            ex.getCodigoArticulo(), ex.getStockDisponible(), ex.getCantidadSolicitada()),
+                    "Falta de Stock", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error al procesar la parada comercial: " + ex.getMessage(),
+                    "Error Inesperado", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private void finalizarEmisionExitosa() {
-        String msg = String.format("""
-                ¡Remito emitido exitosamente!
-                -------------------------------------------------
-                Número Oficial: %s
-                Cliente: %s
-                Total Facturado: $%s
-                
-                ¿Desea iniciar inmediatamente una nueva entrega para el siguiente cliente?
-                """,
-                entregaActual.getNumeroRemito(),
-                ((Cliente) comboClientes.getSelectedItem()).getRazonSocial(),
-                entregaActual.getTotalEntrega());
-
-        int opcion = JOptionPane.showConfirmDialog(this, msg,
-                "Operación Confirmada", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
-
-        resetearRemito();
-        cargarDatosMaestros();
-
-        if (opcion == JOptionPane.YES_OPTION) {
-            comboClientes.requestFocusInWindow();
+    private void mostrarDialogoExito(ParadaResult res) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("¡Operación Registrada con Éxito!\n\n");
+        if (res.huboEntrega()) {
+            sb.append(String.format("• Remito de Entrega: %s ($%,.2f)\n", res.getNumeroRemito(), res.getTotalEntrega()));
         }
+        if (res.huboCobranza()) {
+            sb.append(String.format("• Recibo de Cobranza: %s ($%,.2f)\n", res.getNumeroRecibo(), res.getTotalCobrado()));
+        }
+        sb.append(String.format("\nNuevo Saldo Deudor del Cliente: $%,.2f\n", res.getNuevoSaldoCliente()));
+        sb.append("Stock y cuenta corriente actualizados automáticamente.");
+
+        JOptionPane.showMessageDialog(this, sb.toString(), "Comprobantes Generados", JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void resetearRemito() {
-        this.entregaActual = new Entrega();
-        tableModel.setRowCount(0);
-        spinnerCantidad.setValue(1);
-        recalcularTotalesUI();
-        actualizarCardCredito();
+    private void limpiarCamposParada() {
+        for (ArticuloControl ctrl : articulosControles.values()) {
+            ctrl.setCantidad(0);
+        }
+        txtCobroEfectivo.setText("0.00");
+        txtCobroTransferencia.setText("0.00");
+        txtRefTransferencia.setText("");
+        recalcularParada();
+    }
+
+    private BigDecimal parseMonto(String texto) {
+        if (texto == null || texto.trim().isEmpty()) return BigDecimal.ZERO;
+        try {
+            String limpio = texto.trim().replace("$", "").replace(".", "").replace(",", ".");
+            BigDecimal bd = new BigDecimal(limpio);
+            return bd.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : bd;
+        } catch (NumberFormatException e) {
+            return BigDecimal.ZERO;
+        }
     }
 }

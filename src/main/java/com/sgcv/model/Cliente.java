@@ -65,6 +65,11 @@ public class Cliente {
         return disponible.max(BigDecimal.ZERO);
     }
 
+    public BigDecimal calcularCreditoDisponible() {
+        return getCreditoDisponible();
+    }
+
+
     public int getIdCliente() { return idCliente; }
     public void setIdCliente(int idCliente) { this.idCliente = idCliente; }
 

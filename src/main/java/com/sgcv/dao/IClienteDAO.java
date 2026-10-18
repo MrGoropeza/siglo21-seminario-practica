@@ -36,4 +36,12 @@ public interface IClienteDAO {
      * @throws SQLException ante errores de persistencia
      */
     boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) throws SQLException;
+
+    /**
+     * Obtiene el extracto histórico cronológico (Libro Mayor) de la cuenta corriente del cliente.
+     * @param idCliente ID del cliente
+     * @return lista de movimientos con Debe, Haber y Saldo
+     * @throws SQLException ante errores SQL
+     */
+    java.util.List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) throws SQLException;
 }
