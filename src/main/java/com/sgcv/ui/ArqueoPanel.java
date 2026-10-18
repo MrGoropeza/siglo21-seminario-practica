@@ -52,8 +52,10 @@ public class ArqueoPanel extends JPanel {
     private JLabel lblDiferenciaCaja;
     private JPanel panelBadgeDiferencia;
 
-    // Paso 2: Segregación de Fondos y Cierre
-    private JLabel lblFondoReposicion;
+    // Paso 2: Segregación de Fondos y Cierre (Input manual con tope de cobranza)
+    private JTextField txtFondoReposicion;
+    private JLabel lblSugeridoReposicion;
+    private JLabel lblAlertaTope;
     private JLabel lblMargenNeto;
     private JTextField txtObservaciones;
     private JButton btnCerrarArqueo;
@@ -325,7 +327,7 @@ public class ArqueoPanel extends JPanel {
         lblTit.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         lblTit.setForeground(new Color(20, 40, 80));
 
-        JLabel lblSub = new JLabel("Separación automática del dinero para garantizar la reposición:");
+        JLabel lblSub = new JLabel("Ingresá cuánto apartás para el frigorífico (tope: lo cobrado en mano):");
         lblSub.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
         lblSub.setForeground(new Color(90, 100, 115));
 
@@ -334,35 +336,67 @@ public class ArqueoPanel extends JPanel {
         card.add(pHeader, BorderLayout.NORTH);
 
         // Centro: Los 2 Sobres Físicos de Dinero
-        JPanel pSobres = new JPanel(new GridLayout(2, 1, 0, 8));
+        JPanel pSobres = new JPanel(new GridLayout(2, 1, 0, 10));
         pSobres.setOpaque(false);
 
-        // Sobre 1: Reposición Frigoríficos (Soychú / Tres Arroyos)
-        JPanel pSobre1 = new JPanel(new BorderLayout(0, 3));
+        // Sobre 1: Reposición Frigoríficos (Soychú / Tres Arroyos) - INPUT EDITABLE
+        JPanel pSobre1 = new JPanel(new BorderLayout(0, 4));
         pSobre1.setBackground(new Color(240, 247, 255));
         pSobre1.setBorder(new CompoundBorder(
                 new LineBorder(new Color(185, 215, 245), 1, true),
                 new EmptyBorder(8, 12, 8, 12)
         ));
 
-        JLabel lblTitSobre1 = new JLabel("📦 SOBRE PARA FRIGORÍFICO (Costo de Reposición / Faena)");
-        lblTitSobre1.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        JPanel pHeadSobre1 = new JPanel(new BorderLayout());
+        pHeadSobre1.setOpaque(false);
+        JLabel lblTitSobre1 = new JLabel("📦 SOBRE PARA FRIGORÍFICO (Faena / Reposición)");
+        lblTitSobre1.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         lblTitSobre1.setForeground(new Color(15, 60, 140));
+        pHeadSobre1.add(lblTitSobre1, BorderLayout.WEST);
 
-        lblFondoReposicion = new JLabel("$0.00", SwingConstants.CENTER);
-        lblFondoReposicion.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
-        lblFondoReposicion.setForeground(new Color(10, 50, 130));
+        lblSugeridoReposicion = new JLabel("Sugerido por remitos: $0.00");
+        lblSugeridoReposicion.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        lblSugeridoReposicion.setForeground(new Color(90, 110, 135));
+        pHeadSobre1.add(lblSugeridoReposicion, BorderLayout.EAST);
+        pSobre1.add(pHeadSobre1, BorderLayout.NORTH);
 
-        JLabel lblDescSobre1 = new JLabel("<html><i>Dinero intocable para pagar la faena del frigorífico mañana.</i></html>", SwingConstants.CENTER);
-        lblDescSobre1.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
-        lblDescSobre1.setForeground(new Color(85, 100, 120));
+        JPanel pInputFrigo = new JPanel(new BorderLayout(8, 0));
+        pInputFrigo.setOpaque(false);
 
-        pSobre1.add(lblTitSobre1, BorderLayout.NORTH);
-        pSobre1.add(lblFondoReposicion, BorderLayout.CENTER);
-        pSobre1.add(lblDescSobre1, BorderLayout.SOUTH);
+        JLabel lblSignoPesos = new JLabel("Monto a guardar: $");
+        lblSignoPesos.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        lblSignoPesos.setForeground(new Color(10, 50, 130));
+        pInputFrigo.add(lblSignoPesos, BorderLayout.WEST);
+
+        txtFondoReposicion = new JTextField("0.00");
+        txtFondoReposicion.setPreferredSize(new Dimension(160, 34));
+        txtFondoReposicion.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 17));
+        txtFondoReposicion.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtFondoReposicion.setForeground(new Color(10, 50, 130));
+        txtFondoReposicion.setBackground(Color.WHITE);
+        txtFondoReposicion.setBorder(new CompoundBorder(
+                new LineBorder(new Color(160, 195, 235), 2, true),
+                new EmptyBorder(2, 6, 2, 6)
+        ));
+        txtFondoReposicion.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtFondoReposicion::selectAll); }
+        });
+        txtFondoReposicion.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { recalcularSegregacion(); }
+            @Override public void removeUpdate(DocumentEvent e) { recalcularSegregacion(); }
+            @Override public void changedUpdate(DocumentEvent e) { recalcularSegregacion(); }
+        });
+        pInputFrigo.add(txtFondoReposicion, BorderLayout.CENTER);
+        pSobre1.add(pInputFrigo, BorderLayout.CENTER);
+
+        lblAlertaTope = new JLabel("<html><i>Dinero intocable para pagar la faena del frigorífico mañana.</i></html>");
+        lblAlertaTope.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        lblAlertaTope.setForeground(new Color(85, 100, 120));
+        pSobre1.add(lblAlertaTope, BorderLayout.SOUTH);
+
         pSobres.add(pSobre1);
 
-        // Sobre 2: Margen Neto Real
+        // Sobre 2: Margen Neto Real (Calculado Dinámicamente)
         JPanel pSobre2 = new JPanel(new BorderLayout(0, 3));
         pSobre2.setBackground(new Color(242, 253, 245));
         pSobre2.setBorder(new CompoundBorder(
@@ -370,15 +404,15 @@ public class ArqueoPanel extends JPanel {
                 new EmptyBorder(8, 12, 8, 12)
         ));
 
-        JLabel lblTitSobre2 = new JLabel("💰 MARGEN NETO / GANANCIA LIMPIA DE HOY");
-        lblTitSobre2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+        JLabel lblTitSobre2 = new JLabel("💰 SOBRE DE MARGEN NETO / GANANCIA LIMPIA");
+        lblTitSobre2.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         lblTitSobre2.setForeground(new Color(20, 115, 45));
 
         lblMargenNeto = new JLabel("$0.00", SwingConstants.CENTER);
         lblMargenNeto.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
         lblMargenNeto.setForeground(new Color(15, 115, 45));
 
-        JLabel lblDescSobre2 = new JLabel("<html><i>Ganancia comercial efectiva tras cubrir el costo de mercadería.</i></html>", SwingConstants.CENTER);
+        JLabel lblDescSobre2 = new JLabel("<html><i>Ganancia comercial efectiva tras apartar el sobre del proveedor.</i></html>", SwingConstants.CENTER);
         lblDescSobre2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         lblDescSobre2.setForeground(new Color(85, 100, 120));
 
@@ -467,16 +501,50 @@ public class ArqueoPanel extends JPanel {
             lblCobranzasEfectivoHoy.setText(String.format("$%,.2f", resumenActual.getCobranzasEfectivoTotal()));
             lblCobranzasTransfHoy.setText(String.format("$%,.2f", resumenActual.getCobranzasTransferenciaTotal()));
 
-            lblEfectivoCobrado.setText(String.format("$%,.2f", resumenActual.getCobranzasEfectivoTotal()));
-            lblFondoReposicion.setText(String.format("$%,.2f", resumenActual.getCostoReposicionTotal()));
-            lblMargenNeto.setText(String.format("$%,.2f", resumenActual.getMargenBrutoEstimado()));
+            BigDecimal cobradoEfec = resumenActual.getCobranzasEfectivoTotal();
+            BigDecimal costoRepo = resumenActual.getCostoReposicionTotal();
 
+            lblEfectivoCobrado.setText(String.format("$%,.2f", cobradoEfec));
+            lblSugeridoReposicion.setText(String.format("Sugerido por remitos: $%,.2f", costoRepo));
+
+            // Sugerencia inicial para el fondo frigorífico: si hay costo de reposición y no excede lo cobrado en efectivo,
+            // se precarga ese valor; de lo contrario se precarga lo cobrado en efectivo (o 0.00).
+            BigDecimal sugeridoInput = (costoRepo.compareTo(BigDecimal.ZERO) > 0 && costoRepo.compareTo(cobradoEfec) <= 0)
+                    ? costoRepo
+                    : (cobradoEfec.compareTo(BigDecimal.ZERO) > 0 ? cobradoEfec : BigDecimal.ZERO);
+            txtFondoReposicion.setText(String.format(java.util.Locale.US, "%.2f", sugeridoInput));
+
+            recalcularSegregacion();
             recalcularCuadre();
             recargarHistorial();
 
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this, "Error al calcular métricas de arqueo: " + ex.getMessage(),
                     "Error SQL", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void recalcularSegregacion() {
+        if (resumenActual == null) return;
+
+        BigDecimal cobradoEfec = resumenActual.getCobranzasEfectivoTotal();
+        BigDecimal fondoFrigo = parseMonto(txtFondoReposicion.getText(), BigDecimal.ZERO);
+
+        if (fondoFrigo.compareTo(cobradoEfec) > 0) {
+            lblAlertaTope.setText(String.format("<html><b style='color:#b71c1c;'>⚠️ ALERTA: No podés apartar más del efectivo cobrado en el día ($%,.2f).</b></html>", cobradoEfec));
+            lblMargenNeto.setText("$0.00");
+            lblMargenNeto.setForeground(new Color(183, 28, 28));
+            if (btnCerrarArqueo != null) {
+                btnCerrarArqueo.setEnabled(false);
+            }
+        } else {
+            BigDecimal margenNeto = cobradoEfec.subtract(fondoFrigo);
+            lblAlertaTope.setText("<html><i>Dinero intocable para pagar la faena del frigorífico mañana.</i></html>");
+            lblMargenNeto.setText(String.format("$%,.2f", margenNeto));
+            lblMargenNeto.setForeground(new Color(15, 115, 45));
+            if (btnCerrarArqueo != null) {
+                btnCerrarArqueo.setEnabled(true);
+            }
         }
     }
 
@@ -570,6 +638,16 @@ public class ArqueoPanel extends JPanel {
         BigDecimal real = parseMonto(strReal, BigDecimal.ZERO);
         BigDecimal diferencia = real.subtract(esperado);
 
+        BigDecimal fondoFrigo = parseMonto(txtFondoReposicion.getText(), BigDecimal.ZERO);
+        if (fondoFrigo.compareTo(efecCobrado) > 0) {
+            JOptionPane.showMessageDialog(this,
+                    String.format("El sobre para frigorífico ($%,.2f) no puede superar el total cobrado en efectivo de hoy ($%,.2f).", fondoFrigo, efecCobrado),
+                    "Tope de Cobranza Excedido", JOptionPane.WARNING_MESSAGE);
+            txtFondoReposicion.requestFocus();
+            return;
+        }
+        BigDecimal margenNeto = efecCobrado.subtract(fondoFrigo);
+
         int confirm = JOptionPane.showConfirmDialog(this,
                 String.format("¿Desea asentar el cierre del arqueo de hoy?\n\n" +
                                 "• Efectivo Esperado en Mano: $%,.2f\n" +
@@ -578,7 +656,7 @@ public class ArqueoPanel extends JPanel {
                                 "• Sobre para Frigoríficos (Soychú/Tres Arroyos): $%,.2f\n" +
                                 "• Margen Neto Comercial: $%,.2f\n\n" +
                                 "¿Confirmar y asentar cierre definitivo?",
-                        esperado, real, diferencia, resumenActual.getCostoReposicionTotal(), resumenActual.getMargenBrutoEstimado()),
+                        esperado, real, diferencia, fondoFrigo, margenNeto),
                 "Confirmar Cierre de Caja", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
 
         if (confirm != JOptionPane.YES_OPTION) return;
@@ -591,8 +669,8 @@ public class ArqueoPanel extends JPanel {
             arq.setEfectivoEsperado(esperado);
             arq.setEfectivoRealContado(real);
             arq.setDiferenciaEfectivo(diferencia);
-            arq.setFondoReposicionSegregado(resumenActual.getCostoReposicionTotal());
-            arq.setMargenNetoDia(resumenActual.getMargenBrutoEstimado());
+            arq.setFondoReposicionSegregado(fondoFrigo);
+            arq.setMargenNetoDia(margenNeto);
             arq.setObservaciones(txtObservaciones.getText().trim());
             arq.setEstado("CERRADO");
 
