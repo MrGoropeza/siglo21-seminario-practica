@@ -18,7 +18,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <mysql.version>8.3.0</mysql.version>
         <flatlaf.version>3.4.1</flatlaf.version>
-        <junit.version>5.10.2</junit.version>
     </properties>
 
     <dependencies>
@@ -36,13 +35,6 @@
             <version>${flatlaf.version}</version>
         </dependency>
 
-        <!-- JUnit 5 testing framework -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>${junit.version}</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -54,11 +46,6 @@
                 <configuration>
                     <release>17</release>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
