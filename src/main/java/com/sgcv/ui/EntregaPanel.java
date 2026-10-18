@@ -55,10 +55,9 @@ public class EntregaPanel extends JPanel {
     private List<Articulo> listaArticulos = new ArrayList<>();
     private Cliente clienteSeleccionado;
 
-    // Componentes Selección Cliente
+    // Componentes Selección Cliente (Autocompletado Rápido)
     private JComboBox<String> comboFiltroZona;
-    private JTextField txtBuscarCliente;
-    private JComboBox<Cliente> comboClientes;
+    private ClienteAutoCompleteBox autoCompleteCliente;
 
     // Tarjeta Estado Crediticio
     private JLabel lblRazonSocial;
@@ -72,7 +71,6 @@ public class EntregaPanel extends JPanel {
     private final Map<Integer, ArticuloControl> articulosControles = new HashMap<>();
     private JPanel panelMatrizBultos;
     private JTextField txtBuscarBulto;
-    private JCheckBox chkSoloSeleccionados;
 
     // Cobranza en la Parada
     private JTextField txtCobroEfectivo;
@@ -141,34 +139,20 @@ public class EntregaPanel extends JPanel {
 
         bar.add(new JLabel("Zona:"));
         comboFiltroZona = new JComboBox<>(new String[]{"Todas las Zonas", "Zona Oeste", "Zona Norte", "Zona Sur"});
-        comboFiltroZona.addActionListener(e -> filtrarClientes());
-        bar.add(comboFiltroZona);
-
-        bar.add(new JLabel("🔍 Buscar:"));
-        txtBuscarCliente = new JTextField(12);
-        txtBuscarCliente.setToolTipText("Filtrar por nombre o CUIT");
-        txtBuscarCliente.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e) { filtrarClientes(); }
-            @Override public void removeUpdate(DocumentEvent e) { filtrarClientes(); }
-            @Override public void changedUpdate(DocumentEvent e) { filtrarClientes(); }
-        });
-        bar.add(txtBuscarCliente);
-
-        bar.add(new JLabel("Cliente:"));
-        comboClientes = new JComboBox<>();
-        comboClientes.setPreferredSize(new Dimension(320, 30));
-        comboClientes.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof Cliente c) {
-                    setText(String.format("%s (%s) [Debe: $%,.2f]", c.getRazonSocial(), c.getZonaReparto(), c.getSaldoCuentaCorriente()));
-                }
-                return this;
+        comboFiltroZona.addActionListener(e -> {
+            if (autoCompleteCliente != null) {
+                autoCompleteCliente.setZonaFiltro((String) comboFiltroZona.getSelectedItem());
             }
         });
-        comboClientes.addActionListener(e -> onClienteCambiado());
-        bar.add(comboClientes);
+        bar.add(comboFiltroZona);
+
+        JLabel lblBuscar = new JLabel("👤 Cliente (Buscar/Autocompletar):");
+        lblBuscar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        bar.add(lblBuscar);
+
+        autoCompleteCliente = new ClienteAutoCompleteBox();
+        autoCompleteCliente.setOnClienteSeleccionadoListener(this::onClienteSeleccionado);
+        bar.add(autoCompleteCliente);
 
         JButton btnActualizar = new JButton("🔄 Recargar");
         btnActualizar.addActionListener(e -> recargarDatosMaestros());
@@ -251,7 +235,7 @@ public class EntregaPanel extends JPanel {
         lblTit.setForeground(new Color(20, 35, 60));
         pHeaderBultos.add(lblTit, BorderLayout.WEST);
 
-        // Barra de búsqueda y filtro rápido en ruta
+        // Barra de búsqueda rápida en ruta
         JPanel pFiltros = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         pFiltros.setOpaque(false);
 
@@ -265,18 +249,11 @@ public class EntregaPanel extends JPanel {
         });
         pFiltros.add(txtBuscarBulto);
 
-        chkSoloSeleccionados = new JCheckBox("Solo cargados (>0)");
-        chkSoloSeleccionados.setOpaque(false);
-        chkSoloSeleccionados.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        chkSoloSeleccionados.addActionListener(e -> filtrarTarjetasBultos());
-        pFiltros.add(chkSoloSeleccionados);
-
         JButton btnLimpiarFiltro = new JButton("Ver Todos");
         btnLimpiarFiltro.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         btnLimpiarFiltro.setMargin(new Insets(2, 6, 2, 6));
         btnLimpiarFiltro.addActionListener(e -> {
             txtBuscarBulto.setText("");
-            chkSoloSeleccionados.setSelected(false);
             filtrarTarjetasBultos();
         });
         pFiltros.add(btnLimpiarFiltro);
@@ -322,7 +299,6 @@ public class EntregaPanel extends JPanel {
 
     private void filtrarTarjetasBultos() {
         String filtro = txtBuscarBulto != null ? txtBuscarBulto.getText().trim().toLowerCase() : "";
-        boolean soloSeleccionados = chkSoloSeleccionados != null && chkSoloSeleccionados.isSelected();
 
         panelMatrizBultos.removeAll();
 
@@ -333,9 +309,8 @@ public class EntregaPanel extends JPanel {
             boolean coincideTexto = filtro.isEmpty() ||
                     art.getCodigo().toLowerCase().contains(filtro) ||
                     art.getDescripcion().toLowerCase().contains(filtro);
-            boolean coincideSeleccion = !soloSeleccionados || ctrl.cantidad > 0;
 
-            if (coincideTexto && coincideSeleccion) {
+            if (coincideTexto) {
                 ctrl.panel.setVisible(true);
                 panelMatrizBultos.add(ctrl.panel);
             }
@@ -624,7 +599,24 @@ public class EntregaPanel extends JPanel {
             listaClientes = clienteService.listarActivos();
             listaArticulos = articuloService.listarDisponibles();
 
-            filtrarClientes();
+            if (autoCompleteCliente != null) {
+                autoCompleteCliente.setTodosLosClientes(listaClientes);
+                if (clienteSeleccionado != null) {
+                    Cliente encontrado = listaClientes.stream()
+                            .filter(c -> c.getIdCliente() == clienteSeleccionado.getIdCliente())
+                            .findFirst().orElse(null);
+                    if (encontrado != null) {
+                        autoCompleteCliente.seleccionarCliente(encontrado);
+                    } else if (!listaClientes.isEmpty()) {
+                        autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
+                    } else {
+                        autoCompleteCliente.limpiarSeleccion();
+                    }
+                } else if (!listaClientes.isEmpty()) {
+                    autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
+                }
+            }
+
             construirTarjetasArticulos();
             recalcularParada();
 
@@ -634,31 +626,9 @@ public class EntregaPanel extends JPanel {
         }
     }
 
-    private void filtrarClientes() {
-        String zona = (String) comboFiltroZona.getSelectedItem();
-        String filtro = txtBuscarCliente != null ? txtBuscarCliente.getText().trim().toLowerCase() : "";
-
-        comboClientes.removeAllItems();
-        for (Cliente c : listaClientes) {
-            boolean coincideZona = zona == null || "Todas las Zonas".equals(zona) || zona.equalsIgnoreCase(c.getZonaReparto());
-            boolean coincideTexto = filtro.isEmpty() || c.getRazonSocial().toLowerCase().contains(filtro) || c.getCuit().contains(filtro);
-
-            if (coincideZona && coincideTexto) {
-                comboClientes.addItem(c);
-            }
-        }
-
-        if (comboClientes.getItemCount() > 0) {
-            comboClientes.setSelectedIndex(0);
-        } else {
-            clienteSeleccionado = null;
-            actualizarTarjetaCliente(null);
-        }
-    }
-
-    private void onClienteCambiado() {
-        clienteSeleccionado = (Cliente) comboClientes.getSelectedItem();
-        actualizarTarjetaCliente(clienteSeleccionado);
+    private void onClienteSeleccionado(Cliente c) {
+        this.clienteSeleccionado = c;
+        actualizarTarjetaCliente(c);
         recalcularParada();
     }
 
@@ -863,7 +833,6 @@ public class EntregaPanel extends JPanel {
             ctrl.setCantidad(0);
         }
         if (txtBuscarBulto != null) txtBuscarBulto.setText("");
-        if (chkSoloSeleccionados != null) chkSoloSeleccionados.setSelected(false);
         filtrarTarjetasBultos();
         txtCobroEfectivo.setText("0.00");
         txtCobroTransferencia.setText("0.00");

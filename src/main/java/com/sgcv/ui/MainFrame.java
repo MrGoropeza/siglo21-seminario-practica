@@ -61,6 +61,7 @@ public class MainFrame extends JFrame {
     private JTable tableInventario;
     private TableRowSorter<DefaultTableModel> sorterInventario;
     private JTextField txtBuscarArticulo;
+    private JButton btnDesactivar;
     private JLabel lblStatusInventario;
     private JLabel lblKpiTotalBultos;
     private JLabel lblKpiEstandar;
@@ -238,17 +239,11 @@ public class MainFrame extends JFrame {
         btnModificar.addActionListener(e -> modificarArticuloSeleccionado());
         toolbar.add(btnModificar);
 
-        JButton btnDesactivar = new JButton("🗑️ Desactivar");
+        btnDesactivar = new JButton("🗑️ Desactivar");
         btnDesactivar.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
-        btnDesactivar.setToolTipText("Desactivar producto para evitar su venta en ruta");
-        btnDesactivar.addActionListener(e -> desactivarArticuloSeleccionado());
+        btnDesactivar.setToolTipText("Desactivar o reactivar producto para el catálogo de venta");
+        btnDesactivar.addActionListener(e -> alternarEstadoArticuloSeleccionado());
         toolbar.add(btnDesactivar);
-
-        JButton btnOrdenarMergeSort = new JButton("🔄 Ordenar por Stock");
-        btnOrdenarMergeSort.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        btnOrdenarMergeSort.setToolTipText("Ordenar productos de menor a mayor stock físico");
-        btnOrdenarMergeSort.addActionListener(e -> ejecutarOrdenamientoPorStock());
-        toolbar.add(btnOrdenarMergeSort);
 
         JButton btnBusquedaBinaria = new JButton("⚡ Ir a Código");
         btnBusquedaBinaria.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
@@ -262,16 +257,23 @@ public class MainFrame extends JFrame {
 
         panelCentro.add(toolbar, BorderLayout.NORTH);
 
-        // 3. Tabla de Artículos con Cabeceras Clickeables
-        String[] cols = {"Código", "Descripción", "Tipo Comercial", "Embalaje", "Costo Reposición", "Precio Venta", "Stock Depósito", "Alerta Mínima"};
+        // 3. Tabla de Artículos con Cabeceras Clickeables y Selección Unitaria
+        String[] cols = {"Código", "Descripción", "Tipo Comercial", "Embalaje", "Costo Reposición", "Precio Venta", "Stock Depósito", "Alerta Mínima", "Estado"};
         modelInventario = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
         tableInventario = new JTable(modelInventario);
         tableInventario.setRowHeight(28);
         tableInventario.setAutoCreateRowSorter(true);
+        tableInventario.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         tableInventario.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
         tableInventario.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+
+        tableInventario.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                actualizarBotonEstadoInventario();
+            }
+        });
 
         tableInventario.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -285,25 +287,33 @@ public class MainFrame extends JFrame {
         sorterInventario = new TableRowSorter<>(modelInventario);
         tableInventario.setRowSorter(sorterInventario);
 
-
-        // Renderizador con resaltado para alertas de stock mínimo crítico
+        // Renderizador con soporte para inactivos y alertas de stock mínimo crítico
         tableInventario.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
                 if (!isSelected) {
                     try {
-                        String stockStr = table.getValueAt(row, 6).toString().replaceAll("[^0-9]", "");
-                        String alertaStr = table.getValueAt(row, 7).toString().replaceAll("[^0-9]", "");
-                        int stock = Integer.parseInt(stockStr);
-                        int alerta = Integer.parseInt(alertaStr);
-                        if (stock <= alerta) {
-                            c.setBackground(new Color(255, 243, 205)); // Alerta suave amarilla
+                        String estado = table.getValueAt(row, 8).toString();
+                        boolean esInactivo = estado.contains("INACTIVO");
+                        if (esInactivo) {
+                            c.setBackground(new Color(245, 245, 245));
+                            c.setForeground(new Color(130, 130, 130));
                         } else {
-                            c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
+                            c.setForeground(Color.BLACK);
+                            String stockStr = table.getValueAt(row, 6).toString().replaceAll("[^0-9]", "");
+                            String alertaStr = table.getValueAt(row, 7).toString().replaceAll("[^0-9]", "");
+                            int stock = Integer.parseInt(stockStr);
+                            int alerta = Integer.parseInt(alertaStr);
+                            if (stock <= alerta) {
+                                c.setBackground(new Color(255, 243, 205)); // Alerta suave amarilla
+                            } else {
+                                c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(248, 250, 252));
+                            }
                         }
                     } catch (Exception ex) {
                         c.setBackground(Color.WHITE);
+                        c.setForeground(Color.BLACK);
                     }
                 }
                 return c;
@@ -328,10 +338,11 @@ public class MainFrame extends JFrame {
     private void refrescarTablaInventario() {
         if (modelInventario == null) return;
         try {
-            articulosMemoria = articuloService.listarDisponibles();
+            articulosMemoria = articuloService.listarTodos();
             poblarTablaInventario(articulosMemoria);
-            lblStatusInventario.setText("Catálogo cargado con " + articulosMemoria.size() + " bultos estándares vigentes.");
+            lblStatusInventario.setText("Catálogo cargado con " + articulosMemoria.size() + " bultos totales (activos e inactivos).");
             lblStatusInventario.setForeground(new Color(70, 80, 95));
+            actualizarBotonEstadoInventario();
         } catch (Exception e) {
             // Silencioso en modo desconectado
         }
@@ -345,16 +356,19 @@ public class MainFrame extends JFrame {
         int criticos = 0;
 
         for (Articulo a : lista) {
-            totalBultos += a.getStockDeposito();
-            if (a.getTipoArticulo().contains("PROMOCIÓN")) {
-                promocion++;
-            } else {
-                estandar++;
-            }
-            if (a.getStockDeposito() <= a.getStockMinimoAlerta()) {
-                criticos++;
+            if (a.isActivo()) {
+                totalBultos += a.getStockDeposito();
+                if (a.getTipoArticulo().contains("PROMOCIÓN")) {
+                    promocion++;
+                } else {
+                    estandar++;
+                }
+                if (a.getStockDeposito() <= a.getStockMinimoAlerta()) {
+                    criticos++;
+                }
             }
 
+            String estadoStr = a.isActivo() ? "🟢 ACTIVO" : "🔴 INACTIVO";
             modelInventario.addRow(new Object[]{
                     a.getCodigo(),
                     a.getDescripcion(),
@@ -363,7 +377,8 @@ public class MainFrame extends JFrame {
                     "$" + a.getPrecioCostoReposicion().setScale(2, RoundingMode.HALF_UP),
                     "$" + a.getPrecioVentaBase().setScale(2, RoundingMode.HALF_UP),
                     a.getStockDeposito() + " bultos",
-                    a.getStockMinimoAlerta() + " bultos"
+                    a.getStockMinimoAlerta() + " bultos",
+                    estadoStr
             });
         }
 
@@ -459,10 +474,38 @@ public class MainFrame extends JFrame {
         }
     }
 
-    private void desactivarArticuloSeleccionado() {
+    private void actualizarBotonEstadoInventario() {
+        if (btnDesactivar == null) return;
         int selectedRow = tableInventario.getSelectedRow();
         if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this, "Seleccione un producto de la tabla para desactivar.",
+            btnDesactivar.setText("🗑️ Desactivar");
+            btnDesactivar.setForeground(Color.DARK_GRAY);
+            btnDesactivar.setToolTipText("Seleccione un producto para desactivar o reactivar");
+            return;
+        }
+        int modelRow = tableInventario.convertRowIndexToModel(selectedRow);
+        String codigo = (String) modelInventario.getValueAt(modelRow, 0);
+        Articulo encontrado = articulosMemoria.stream()
+                .filter(a -> a.getCodigo().equalsIgnoreCase(codigo))
+                .findFirst().orElse(null);
+
+        if (encontrado != null) {
+            if (encontrado.isActivo()) {
+                btnDesactivar.setText("🗑️ Desactivar");
+                btnDesactivar.setForeground(new Color(190, 30, 20));
+                btnDesactivar.setToolTipText("Desactivar producto para pausar su venta en ruta");
+            } else {
+                btnDesactivar.setText("🔄 Reactivar");
+                btnDesactivar.setForeground(new Color(25, 125, 55));
+                btnDesactivar.setToolTipText("Reactivar producto para volver a venderlo en ruta");
+            }
+        }
+    }
+
+    private void alternarEstadoArticuloSeleccionado() {
+        int selectedRow = tableInventario.getSelectedRow();
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione un producto de la tabla para modificar su estado.",
                     "Selección Requerida", JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -473,18 +516,35 @@ public class MainFrame extends JFrame {
                 .findFirst().orElse(null);
 
         if (encontrado != null) {
-            int resp = JOptionPane.showConfirmDialog(this,
-                    String.format("¿Desea desactivar el producto '%s - %s' del catálogo de ventas?\n\n" +
-                                    "No aparecerá en la toma de pedidos en ruta, pero los remitos y cierres históricos conservarán su snapshot intacto.",
-                            encontrado.getCodigo(), encontrado.getDescripcion()),
-                    "Desactivar Producto", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (resp == JOptionPane.YES_OPTION) {
-                try {
-                    articuloService.eliminarArticulo(encontrado.getIdArticulo());
-                    JOptionPane.showMessageDialog(this, "Producto desactivado correctamente.", "Catálogo Actualizado", JOptionPane.INFORMATION_MESSAGE);
-                    refrescarTodosLosDatos();
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Error al desactivar producto: " + ex.getMessage(), "Error SQL", JOptionPane.ERROR_MESSAGE);
+            if (encontrado.isActivo()) {
+                int resp = JOptionPane.showConfirmDialog(this,
+                        String.format("¿Desea desactivar el producto '%s - %s'?\n\n" +
+                                        "El producto permanecerá visible en este catálogo como INACTIVO pero no se ofrecerá para venta en la camioneta.",
+                                encontrado.getCodigo(), encontrado.getDescripcion()),
+                        "Desactivar Producto", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (resp == JOptionPane.YES_OPTION) {
+                    try {
+                        articuloService.eliminarArticulo(encontrado.getIdArticulo());
+                        JOptionPane.showMessageDialog(this, "Producto desactivado correctamente.", "Catálogo Actualizado", JOptionPane.INFORMATION_MESSAGE);
+                        refrescarTodosLosDatos();
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(this, "Error al desactivar producto: " + ex.getMessage(), "Error SQL", JOptionPane.ERROR_MESSAGE);
+                    }
+                }
+            } else {
+                int resp = JOptionPane.showConfirmDialog(this,
+                        String.format("¿Desea reactivar el producto '%s - %s'?\n\n" +
+                                        "Volverá a aparecer en la pantalla de parada en ruta para su venta directa.",
+                                encontrado.getCodigo(), encontrado.getDescripcion()),
+                        "Reactivar Producto", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (resp == JOptionPane.YES_OPTION) {
+                    try {
+                        articuloService.reactivarArticulo(encontrado.getIdArticulo());
+                        JOptionPane.showMessageDialog(this, "Producto reactivado correctamente.", "Catálogo Actualizado", JOptionPane.INFORMATION_MESSAGE);
+                        refrescarTodosLosDatos();
+                    } catch (Exception ex) {
+                        JOptionPane.showMessageDialog(this, "Error al reactivar producto: " + ex.getMessage(), "Error SQL", JOptionPane.ERROR_MESSAGE);
+                    }
                 }
             }
         }

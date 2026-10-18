@@ -20,11 +20,26 @@ public interface IArticuloDAO {
     Articulo buscarPorId(int idArticulo) throws SQLException;
 
     /**
-     * Lista todos los artículos vigentes en el catálogo para venta.
+     * Lista todos los artículos vigentes en el catálogo para venta (solo activos).
      * @return lista de artículos activos
      * @throws SQLException ante fallas de persistencia
      */
     List<Articulo> listarDisponibles() throws SQLException;
+
+    /**
+     * Lista todos los artículos del catálogo general (tanto activos como inactivos).
+     * @return lista completa de artículos
+     * @throws SQLException ante fallas de persistencia
+     */
+    List<Articulo> listarTodos() throws SQLException;
+
+    /**
+     * Reactiva un artículo previamente desactivado.
+     * @param idArticulo ID del artículo
+     * @return true si fue reactivado
+     * @throws SQLException ante fallas de persistencia
+     */
+    boolean reactivarArticulo(int idArticulo) throws SQLException;
 
     /**
      * Decrementa atómicamente el stock físico dentro de una transacción activa.

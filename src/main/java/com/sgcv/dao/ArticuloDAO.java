@@ -55,6 +55,32 @@ public class ArticuloDAO implements IArticuloDAO {
     }
 
     @Override
+    public List<Articulo> listarTodos() throws SQLException {
+        List<Articulo> lista = new ArrayList<>();
+        String sql = "SELECT id_articulo, codigo, descripcion, unidad_embalaje, " +
+                     "precio_costo_reposicion, precio_venta_base, stock_deposito, stock_minimo_alerta, activo " +
+                     "FROM articulos ORDER BY codigo";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                lista.add(mapearArticulo(rs));
+            }
+        }
+        return lista;
+    }
+
+    @Override
+    public boolean reactivarArticulo(int idArticulo) throws SQLException {
+        String sql = "UPDATE articulos SET activo = TRUE WHERE id_articulo = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, idArticulo);
+            return ps.executeUpdate() > 0;
+        }
+    }
+
+    @Override
     public boolean decrementarStock(int idArticulo, int cantidad, Connection conn) throws SQLException {
         String sql = "UPDATE articulos SET stock_deposito = stock_deposito - ? WHERE id_articulo = ? AND stock_deposito >= ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {

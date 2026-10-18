@@ -42,9 +42,8 @@ public class CuentasCorrientesPanel extends JPanel {
     private List<Cliente> listaClientes = new ArrayList<>();
     private Cliente clienteSeleccionado;
 
-    // Componentes de Búsqueda y Selección
-    private JTextField txtBuscarCliente;
-    private JComboBox<Cliente> comboClientes;
+    // Componente de Búsqueda y Selección Unificado (Autocompletar)
+    private ClienteAutoCompleteBox autoCompleteCliente;
 
     // Tarjeta de Estado Crediticio del Cliente
     private JLabel lblRazonSocial;
@@ -90,44 +89,20 @@ public class CuentasCorrientesPanel extends JPanel {
     }
 
     private JPanel crearBarraSeleccionCliente() {
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
         bar.setBackground(Color.WHITE);
         bar.setBorder(new CompoundBorder(
                 new LineBorder(new Color(218, 224, 233), 1, true),
                 new EmptyBorder(4, 8, 4, 8)
         ));
 
-        JLabel lblBuscar = new JLabel("🔍 Buscar Cliente:");
+        JLabel lblBuscar = new JLabel("👤 Cliente (Buscar / Autocompletar):");
         lblBuscar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         bar.add(lblBuscar);
 
-        txtBuscarCliente = new JTextField(16);
-        txtBuscarCliente.setToolTipText("Escriba nombre o CUIT para filtrar");
-        txtBuscarCliente.getDocument().addDocumentListener(new DocumentListener() {
-            @Override public void insertUpdate(DocumentEvent e) { filtrarComboClientes(); }
-            @Override public void removeUpdate(DocumentEvent e) { filtrarComboClientes(); }
-            @Override public void changedUpdate(DocumentEvent e) { filtrarComboClientes(); }
-        });
-        bar.add(txtBuscarCliente);
-
-        JLabel lblCombo = new JLabel("Cliente:");
-        lblCombo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        bar.add(lblCombo);
-
-        comboClientes = new JComboBox<>();
-        comboClientes.setPreferredSize(new Dimension(340, 30));
-        comboClientes.setRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof Cliente c) {
-                    setText(String.format("%s - %s [Debe: $%,.2f]", c.getRazonSocial(), c.getZonaReparto(), c.getSaldoCuentaCorriente()));
-                }
-                return this;
-            }
-        });
-        comboClientes.addActionListener(e -> onClienteSeleccionado());
-        bar.add(comboClientes);
+        autoCompleteCliente = new ClienteAutoCompleteBox();
+        autoCompleteCliente.setOnClienteSeleccionadoListener(this::onClienteSeleccionado);
+        bar.add(autoCompleteCliente);
 
         JButton btnRefrescar = new JButton("🔄 Actualizar");
         btnRefrescar.addActionListener(e -> recargarClientes(clienteSeleccionado));
@@ -344,17 +319,22 @@ public class CuentasCorrientesPanel extends JPanel {
     public void recargarClientes(Cliente seleccionar) {
         try {
             listaClientes = clienteService.listarActivos();
-            filtrarComboClientes();
-            if (seleccionar != null) {
-                for (int i = 0; i < comboClientes.getItemCount(); i++) {
-                    Cliente c = comboClientes.getItemAt(i);
-                    if (c != null && c.getIdCliente() == seleccionar.getIdCliente()) {
-                        comboClientes.setSelectedIndex(i);
-                        break;
+            if (autoCompleteCliente != null) {
+                autoCompleteCliente.setTodosLosClientes(listaClientes);
+                if (seleccionar != null) {
+                    Cliente encontrado = listaClientes.stream()
+                            .filter(c -> c.getIdCliente() == seleccionar.getIdCliente())
+                            .findFirst().orElse(null);
+                    if (encontrado != null) {
+                        autoCompleteCliente.seleccionarCliente(encontrado);
+                    } else if (!listaClientes.isEmpty()) {
+                        autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
+                    } else {
+                        autoCompleteCliente.limpiarSeleccion();
                     }
+                } else if (!listaClientes.isEmpty()) {
+                    autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
                 }
-            } else if (comboClientes.getItemCount() > 0) {
-                comboClientes.setSelectedIndex(0);
             }
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this, "Error al cargar clientes: " + ex.getMessage(),
@@ -362,18 +342,8 @@ public class CuentasCorrientesPanel extends JPanel {
         }
     }
 
-    private void filtrarComboClientes() {
-        String filtro = txtBuscarCliente != null ? txtBuscarCliente.getText().trim().toLowerCase() : "";
-        comboClientes.removeAllItems();
-        for (Cliente c : listaClientes) {
-            if (filtro.isEmpty() || c.getRazonSocial().toLowerCase().contains(filtro) || c.getCuit().contains(filtro)) {
-                comboClientes.addItem(c);
-            }
-        }
-    }
-
-    private void onClienteSeleccionado() {
-        clienteSeleccionado = (Cliente) comboClientes.getSelectedItem();
+    private void onClienteSeleccionado(Cliente c) {
+        this.clienteSeleccionado = c;
         if (clienteSeleccionado == null) {
             limpiarVistaExtracto();
             return;

@@ -337,6 +337,19 @@ public class EntregaServiceTest {
         public List<Articulo> listarDisponibles() { return new ArrayList<>(repo.values()); }
 
         @Override
+        public List<Articulo> listarTodos() { return new ArrayList<>(repo.values()); }
+
+        @Override
+        public boolean reactivarArticulo(int idArticulo) {
+            Articulo a = repo.get(idArticulo);
+            if (a != null) {
+                a.setActivo(true);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
         public boolean decrementarStock(int idArticulo, int cantidad, Connection conn) {
             Articulo a = repo.get(idArticulo);
             if (a != null && a.tieneStock(cantidad)) {

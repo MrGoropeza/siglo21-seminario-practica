@@ -116,6 +116,31 @@ class ArticuloServiceTest {
             assertNotNull(recuperado);
             assertFalse(recuperado.isActivo(), "Debe marcarse como inactivo (soft-delete)");
         }
+
+        @Test
+        @DisplayName("Reactivación de producto previamente desactivado")
+        void testReactivarArticulo() throws SQLException {
+            Articulo inactivo = new ArticuloEstandar(12, "ALAS-05", "Alitas", "Caja",
+                    new BigDecimal("5000.00"), new BigDecimal("7000.00"), 10, 2, false);
+            fakeDAO.articulos.add(inactivo);
+
+            boolean reactivado = articuloService.reactivarArticulo(12);
+            assertTrue(reactivado);
+
+            Articulo recuperado = articuloService.buscarPorId(12);
+            assertNotNull(recuperado);
+            assertTrue(recuperado.isActivo(), "Debe marcarse como activo tras reactivación");
+        }
+
+        @Test
+        @DisplayName("listarTodos recupera activos e inactivos, mientras listarDisponibles solo activos")
+        void testListarTodosVsDisponibles() throws SQLException {
+            fakeDAO.articulos.add(new ArticuloEstandar(1, "A1", "Activo", "Caja", BigDecimal.ONE, BigDecimal.TEN, 10, 2, true));
+            fakeDAO.articulos.add(new ArticuloEstandar(2, "A2", "Inactivo", "Caja", BigDecimal.ONE, BigDecimal.TEN, 10, 2, false));
+
+            assertEquals(2, articuloService.listarTodos().size(), "listarTodos debe traer ambos");
+            assertEquals(1, articuloService.listarDisponibles().size(), "listarDisponibles solo activos");
+        }
     }
 
     // =========================================================================
@@ -134,6 +159,21 @@ class ArticuloServiceTest {
         @Override
         public List<Articulo> listarDisponibles() {
             return articulos.stream().filter(Articulo::isActivo).toList();
+        }
+
+        @Override
+        public List<Articulo> listarTodos() {
+            return new ArrayList<>(articulos);
+        }
+
+        @Override
+        public boolean reactivarArticulo(int idArticulo) {
+            Articulo a = buscarPorId(idArticulo);
+            if (a != null) {
+                a.setActivo(true);
+                return true;
+            }
+            return false;
         }
 
         @Override

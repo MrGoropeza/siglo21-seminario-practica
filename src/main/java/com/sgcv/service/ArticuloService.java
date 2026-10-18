@@ -35,6 +35,11 @@ public class ArticuloService implements IArticuloService {
     }
 
     @Override
+    public List<Articulo> listarTodos() throws SQLException {
+        return articuloDAO.listarTodos();
+    }
+
+    @Override
     public Articulo buscarPorId(int id) throws SQLException {
         return articuloDAO.buscarPorId(id);
     }
@@ -217,6 +222,14 @@ public class ArticuloService implements IArticuloService {
             throw new ValidacionException("ID de artículo inválido: " + idArticulo);
         }
         return articuloDAO.eliminarArticulo(idArticulo);
+    }
+
+    @Override
+    public boolean reactivarArticulo(int idArticulo) throws SQLException {
+        if (idArticulo <= 0) {
+            throw new ValidacionException("ID de artículo inválido: " + idArticulo);
+        }
+        return articuloDAO.reactivarArticulo(idArticulo);
     }
 
     @Override

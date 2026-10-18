@@ -18,6 +18,18 @@ public interface IArticuloService {
     List<Articulo> listarDisponibles() throws SQLException;
 
     /**
+     * Obtiene el catálogo completo de bultos avícolas (activos e inactivos).
+     * @return lista de todos los artículos
+     * @throws SQLException ante errores de acceso a datos
+     */
+    List<Articulo> listarTodos() throws SQLException;
+
+    /**
+     * Reactiva un producto previamente desactivado en el catálogo.
+     */
+    boolean reactivarArticulo(int idArticulo) throws SQLException;
+
+    /**
      * Recupera un artículo por su identificador primario.
      * @param id identificador
      * @return artículo encontrado o null
