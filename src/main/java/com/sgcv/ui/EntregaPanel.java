@@ -1,10 +1,18 @@
 package com.sgcv.ui;
 
+import com.sgcv.exception.LimiteCreditoExcedidoException;
+import com.sgcv.exception.StockInsuficienteException;
+import com.sgcv.exception.ValidacionException;
 import com.sgcv.model.Articulo;
 import com.sgcv.model.Cliente;
 import com.sgcv.model.DetalleEntrega;
 import com.sgcv.model.Entrega;
+import com.sgcv.service.ArticuloService;
+import com.sgcv.service.ClienteService;
 import com.sgcv.service.EntregaService;
+import com.sgcv.service.IArticuloService;
+import com.sgcv.service.IClienteService;
+import com.sgcv.service.IEntregaService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -15,10 +23,14 @@ import java.util.List;
 
 /**
  * Panel de captura operativa para el registro de entregas en ruta (CU-01).
+ * Interactúa con la capa de servicios desacoplada y captura excepciones tipadas de negocio.
  */
 public class EntregaPanel extends JPanel {
 
-    private final EntregaService entregaService;
+    private final IEntregaService entregaService;
+    private final IClienteService clienteService;
+    private final IArticuloService articuloService;
+
     private JComboBox<Cliente> comboClientes;
     private JComboBox<Articulo> comboArticulos;
     private JSpinner spinnerCantidad;
@@ -32,8 +44,15 @@ public class EntregaPanel extends JPanel {
     private Entrega entregaActual;
 
     public EntregaPanel() {
-        this.entregaService = new EntregaService();
+        this(new EntregaService(), new ClienteService(), new ArticuloService());
+    }
+
+    public EntregaPanel(IEntregaService entregaService, IClienteService clienteService, IArticuloService articuloService) {
+        this.entregaService = entregaService;
+        this.clienteService = clienteService;
+        this.articuloService = articuloService;
         this.entregaActual = new Entrega();
+
         inicializarComponentes();
         cargarDatosMaestros();
     }
@@ -82,7 +101,7 @@ public class EntregaPanel extends JPanel {
         panelAgregar.add(btnAgregar);
         panelCentro.add(panelAgregar, BorderLayout.NORTH);
 
-        String[] columnas = {"Código", "Descripción", "Bultos", "Precio Unitario", "Subtotal"};
+        String[] columnas = {"Código", "Descripción", "Conservación", "Bultos", "Precio Unitario", "Subtotal"};
         tableModel = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -110,15 +129,15 @@ public class EntregaPanel extends JPanel {
         add(panelSur, BorderLayout.SOUTH);
     }
 
-    private void cargarDatosMaestros() {
+    public void cargarDatosMaestros() {
         try {
-            List<Cliente> clientes = entregaService.getClienteDAO().listarActivos();
+            List<Cliente> clientes = clienteService.listarActivos();
             comboClientes.removeAllItems();
             for (Cliente c : clientes) {
                 comboClientes.addItem(c);
             }
 
-            List<Articulo> articulos = entregaService.getArticuloDAO().listarDisponibles();
+            List<Articulo> articulos = articuloService.listarDisponibles();
             comboArticulos.removeAllItems();
             for (Articulo a : articulos) {
                 comboArticulos.addItem(a);
@@ -153,19 +172,21 @@ public class EntregaPanel extends JPanel {
             JOptionPane.showMessageDialog(this,
                 "Stock insuficiente para el artículo: " + art.getCodigo() + 
                 "\nDisponible en depósito: " + art.getStockDeposito() + " bultos.",
-                "Alerta de Stock", JOptionPane.WARNING_MESSAGE);
+                "Alerta de Stock Físico", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
+        // Cálculo polimórfico de precio según tipo de artículo (fresco vs congelado)
+        BigDecimal precioPolimorfico = art.calcularPrecioVentaFinal(cant);
         DetalleEntrega det = new DetalleEntrega(
             art.getIdArticulo(), art.getCodigo(), art.getDescripcion(),
-            cant, art.getPrecioVentaBase(), art.getPrecioCostoReposicion(), BigDecimal.ZERO
+            cant, precioPolimorfico, art.getPrecioCostoReposicion(), BigDecimal.ZERO
         );
         entregaActual.agregarDetalle(det);
 
         tableModel.addRow(new Object[]{
-            art.getCodigo(), art.getDescripcion(), cant,
-            "$" + art.getPrecioVentaBase(), "$" + det.getSubtotal()
+            art.getCodigo(), art.getDescripcion(), art.getCategoriaConservacion(),
+            cant, "$" + precioPolimorfico, "$" + det.getSubtotal()
         });
 
         lblTotal.setText("TOTAL REMITO: $" + entregaActual.getTotalEntrega());
@@ -182,37 +203,57 @@ public class EntregaPanel extends JPanel {
         entregaActual.setIdCliente(cli.getIdCliente());
         entregaActual.setIdUsuario(1);
 
-        // Regla de Negocio: Validación de límite de crédito (CU-01 S10)
-        if (cli.estaExcedido(entregaActual.getTotalEntrega())) {
-            BigDecimal exceso = cli.getSaldoCuentaCorriente().add(entregaActual.getTotalEntrega()).subtract(cli.getLimiteCredito());
-            int resp = JOptionPane.showConfirmDialog(this,
-                "¡ADVERTENCIA DE CRÉDITO EXCEDIDO (CU-01)!\n" +
-                "El saldo proyectado superará el límite autorizado por $" + exceso + ".\n" +
-                "¿Desea autorizar excepcionalmente la salida de mercadería en ruta?",
-                "Alerta de Riesgo Crediticio", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-            if (resp != JOptionPane.YES_OPTION) {
-                return;
-            }
-            entregaActual.setObservaciones("Entrega con exceso de crédito autorizada por operador.");
-        }
-
         try {
             boolean exito = entregaService.registrarEntrega(entregaActual);
             if (exito) {
-                JOptionPane.showMessageDialog(this,
-                    "¡Entrega confirmada exitosamente!\n" +
-                    "Número de Remito: " + entregaActual.getNumeroRemito() + "\n" +
-                    "Total Facturado: $" + entregaActual.getTotalEntrega(),
-                    "Operación Exitosa", JOptionPane.INFORMATION_MESSAGE);
-                // Resetear panel
-                this.entregaActual = new Entrega();
-                tableModel.setRowCount(0);
-                lblTotal.setText("TOTAL REMITO: $0.00");
-                cargarDatosMaestros();
+                mostrarDialogoExito();
             }
+        } catch (StockInsuficienteException sie) {
+            JOptionPane.showMessageDialog(this,
+                    sie.getMessage(),
+                    "Stock Insuficiente en Depósito",
+                    JOptionPane.WARNING_MESSAGE);
+        } catch (LimiteCreditoExcedidoException lce) {
+            int resp = JOptionPane.showConfirmDialog(this,
+                    lce.getMessage() + "\n\n¿Desea autorizar excepcionalmente la entrega como operador supervisor?",
+                    "Alerta de Riesgo Crediticio (CU-01 S10)",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE);
+
+            if (resp == JOptionPane.YES_OPTION) {
+                entregaActual.setObservaciones("Entrega con exceso de crédito autorizada por operador.");
+                try {
+                    boolean exito = entregaService.registrarEntrega(entregaActual, true);
+                    if (exito) {
+                        mostrarDialogoExito();
+                    }
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this,
+                            "Error al autorizar entrega: " + ex.getMessage(),
+                            "Error Transaccional", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        } catch (ValidacionException ve) {
+            JOptionPane.showMessageDialog(this, ve.getMessage(),
+                    "Validación de Operación", JOptionPane.WARNING_MESSAGE);
         } catch (Exception ex) {
-            JOptionPane.showMessageDialog(this, "Error al confirmar entrega: " + ex.getMessage(),
-                "Error Transaccional", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Error al confirmar entrega: " + ex.getMessage(),
+                    "Error Transaccional", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void mostrarDialogoExito() {
+        JOptionPane.showMessageDialog(this,
+                "¡Entrega confirmada exitosamente!\n" +
+                "Número de Remito: " + entregaActual.getNumeroRemito() + "\n" +
+                "Total Facturado: $" + entregaActual.getTotalEntrega(),
+                "Operación Exitosa", JOptionPane.INFORMATION_MESSAGE);
+
+        // Resetear formulario
+        this.entregaActual = new Entrega();
+        tableModel.setRowCount(0);
+        lblTotal.setText("TOTAL REMITO: $0.00");
+        cargarDatosMaestros();
     }
 }

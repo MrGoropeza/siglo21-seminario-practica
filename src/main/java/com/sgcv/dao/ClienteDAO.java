@@ -12,10 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Data Access Object para la entidad Cliente.
+ * Data Access Object para la entidad Cliente implementando IClienteDAO.
  */
-public class ClienteDAO {
+public class ClienteDAO implements IClienteDAO {
 
+    @Override
     public Cliente buscarPorId(int idCliente) throws SQLException {
         String sql = "SELECT id_cliente, razon_social, cuit, direccion, telefono, zona_reparto, " +
                      "saldo_cuenta_corriente, limite_credito, activo FROM clientes WHERE id_cliente = ?";
@@ -31,6 +32,7 @@ public class ClienteDAO {
         return null;
     }
 
+    @Override
     public List<Cliente> listarActivos() throws SQLException {
         List<Cliente> lista = new ArrayList<>();
         String sql = "SELECT id_cliente, razon_social, cuit, direccion, telefono, zona_reparto, " +
@@ -45,6 +47,7 @@ public class ClienteDAO {
         return lista;
     }
 
+    @Override
     public boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) throws SQLException {
         String sql = "UPDATE clientes SET saldo_cuenta_corriente = saldo_cuenta_corriente + ? WHERE id_cliente = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {

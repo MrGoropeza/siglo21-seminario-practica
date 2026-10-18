@@ -3,6 +3,12 @@ package com.sgcv.service;
 import com.sgcv.dao.ArticuloDAO;
 import com.sgcv.dao.ClienteDAO;
 import com.sgcv.dao.EntregaDAO;
+import com.sgcv.dao.IArticuloDAO;
+import com.sgcv.dao.IClienteDAO;
+import com.sgcv.dao.IEntregaDAO;
+import com.sgcv.exception.LimiteCreditoExcedidoException;
+import com.sgcv.exception.StockInsuficienteException;
+import com.sgcv.exception.ValidacionException;
 import com.sgcv.model.Articulo;
 import com.sgcv.model.Cliente;
 import com.sgcv.model.DetalleEntrega;
@@ -14,62 +20,108 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 /**
- * Servicio transaccional que implementa las reglas de negocio para el registro de entregas.
+ * Servicio transaccional que coordina las reglas de negocio de distribución avícola,
+ * el snapshot inmutable de precios y la persistencia atómica ACID de entregas.
  */
-public class EntregaService {
+public class EntregaService implements IEntregaService {
 
-    private final ClienteDAO clienteDAO;
-    private final ArticuloDAO articuloDAO;
-    private final EntregaDAO entregaDAO;
-
-    public EntregaService() {
-        this.clienteDAO = new ClienteDAO();
-        this.articuloDAO = new ArticuloDAO();
-        this.entregaDAO = new EntregaDAO();
+    @FunctionalInterface
+    public interface ConnectionSupplier {
+        Connection get() throws SQLException;
     }
 
-    public EntregaService(ClienteDAO clienteDAO, ArticuloDAO articuloDAO, EntregaDAO entregaDAO) {
+    private final IClienteDAO clienteDAO;
+    private final IArticuloDAO articuloDAO;
+    private final IEntregaDAO entregaDAO;
+    private final ConnectionSupplier connectionSupplier;
+
+    public EntregaService() {
+        this(new ClienteDAO(), new ArticuloDAO(), new EntregaDAO(), DatabaseConnection::getConnection);
+    }
+
+    public EntregaService(IClienteDAO clienteDAO, IArticuloDAO articuloDAO, IEntregaDAO entregaDAO) {
+        this(clienteDAO, articuloDAO, entregaDAO, DatabaseConnection::getConnection);
+    }
+
+    public EntregaService(IClienteDAO clienteDAO, IArticuloDAO articuloDAO, IEntregaDAO entregaDAO,
+                          ConnectionSupplier connectionSupplier) {
         this.clienteDAO = clienteDAO;
         this.articuloDAO = articuloDAO;
         this.entregaDAO = entregaDAO;
+        this.connectionSupplier = connectionSupplier != null ? connectionSupplier : DatabaseConnection::getConnection;
     }
 
+    @Override
     public boolean validarExcesoLimiteCredito(int idCliente, BigDecimal totalEstimado) throws SQLException {
         Cliente cliente = clienteDAO.buscarPorId(idCliente);
         if (cliente == null) {
-            throw new IllegalArgumentException("Cliente inexistente ID: " + idCliente);
+            throw new ValidacionException("Cliente inexistente ID: " + idCliente);
         }
         return cliente.estaExcedido(totalEstimado);
     }
 
-    public boolean registrarEntrega(Entrega entrega) throws SQLException {
+    @Override
+    public boolean registrarEntrega(Entrega entrega)
+            throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException {
+        return registrarEntrega(entrega, false);
+    }
+
+    @Override
+    public boolean registrarEntrega(Entrega entrega, boolean autorizarExcesoCredito)
+            throws SQLException, StockInsuficienteException, LimiteCreditoExcedidoException {
         if (entrega == null || entrega.getDetalles().isEmpty()) {
-            throw new IllegalArgumentException("La entrega debe contener al menos un renglón de mercadería.");
+            throw new ValidacionException("La entrega debe contener al menos un renglón de mercadería.");
         }
 
-        // 1. Validar stock disponible para todos los ítems antes de abrir transacción
+        // 1. Validar existencia del cliente
+        Cliente cliente = clienteDAO.buscarPorId(entrega.getIdCliente());
+        if (cliente == null) {
+            throw new ValidacionException("Cliente no registrado con ID: " + entrega.getIdCliente());
+        }
+
+        // 2. Validar stock físico disponible y congelar precios con cálculo polimórfico
         for (DetalleEntrega det : entrega.getDetalles()) {
             Articulo art = articuloDAO.buscarPorId(det.getIdArticulo());
-            if (art == null || !art.tieneStock(det.getCantidadBultos())) {
-                int disp = art != null ? art.getStockDeposito() : 0;
-                throw new IllegalStateException("Stock insuficiente para artículo [" + 
-                    (art != null ? art.getCodigo() : det.getIdArticulo()) + 
-                    "]. Disponible: " + disp + ", Solicitado: " + det.getCantidadBultos());
+            if (art == null) {
+                throw new ValidacionException("Artículo no encontrado con ID: " + det.getIdArticulo());
             }
-            // Snapshot inmutable: congelar precios y costos vigentes
-            det.setPrecioUnitarioCongelado(art.getPrecioVentaBase());
+            if (!art.tieneStock(det.getCantidadBultos())) {
+                throw new StockInsuficienteException(art.getCodigo(), art.getStockDeposito(), det.getCantidadBultos());
+            }
+
+            // Snapshot inmutable: cálculo polimórfico de precio final según categoría (fresco vs congelado)
+            BigDecimal precioFinal = art.calcularPrecioVentaFinal(det.getCantidadBultos());
+            det.setPrecioUnitarioCongelado(precioFinal);
             det.setCostoUnitarioCongelado(art.getPrecioCostoReposicion());
         }
 
         entrega.recalcularTotal();
+
+        // 3. Control de riesgo crediticio (CU-01 S10)
+        if (cliente.estaExcedido(entrega.getTotalEntrega())) {
+            boolean autorizadoPorObservaciones = entrega.getObservaciones() != null &&
+                    entrega.getObservaciones().toLowerCase().contains("autorizad");
+            if (!autorizarExcesoCredito && !autorizadoPorObservaciones) {
+                BigDecimal saldoProyectado = cliente.getSaldoCuentaCorriente().add(entrega.getTotalEntrega());
+                BigDecimal exceso = saldoProyectado.subtract(cliente.getLimiteCredito());
+                throw new LimiteCreditoExcedidoException(
+                        String.format("Límite de crédito excedido para cliente '%s' (Saldo actual: $%s, Límite: $%s, Total entrega: $%s, Exceso: $%s).",
+                                cliente.getRazonSocial(), cliente.getSaldoCuentaCorriente(), cliente.getLimiteCredito(),
+                                entrega.getTotalEntrega(), exceso),
+                        cliente.getIdCliente(), cliente.getSaldoCuentaCorriente(), cliente.getLimiteCredito(),
+                        entrega.getTotalEntrega()
+                );
+            }
+        }
+
         if (entrega.getNumeroRemito() == null || entrega.getNumeroRemito().isBlank()) {
             entrega.setNumeroRemito(entregaDAO.obtenerSiguienteNumeroRemito());
         }
 
-        // 2. Transacción Atómica ACID
+        // 4. Transacción Atómica ACID
         Connection conn = null;
         try {
-            conn = DatabaseConnection.getConnection();
+            conn = connectionSupplier.get();
             conn.setAutoCommit(false);
 
             // A. Insertar cabecera de entrega
@@ -114,7 +166,12 @@ public class EntregaService {
         }
     }
 
-    public EntregaDAO getEntregaDAO() { return entregaDAO; }
-    public ClienteDAO getClienteDAO() { return clienteDAO; }
-    public ArticuloDAO getArticuloDAO() { return articuloDAO; }
+    @Override
+    public IEntregaDAO getEntregaDAO() { return entregaDAO; }
+
+    @Override
+    public IClienteDAO getClienteDAO() { return clienteDAO; }
+
+    @Override
+    public IArticuloDAO getArticuloDAO() { return articuloDAO; }
 }
