@@ -40,7 +40,8 @@ CREATE TABLE clientes (
     saldo_cuenta_corriente DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     limite_credito DECIMAL(12,2) NOT NULL DEFAULT 0.00,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
-    fecha_alta TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    fecha_alta TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------------------------

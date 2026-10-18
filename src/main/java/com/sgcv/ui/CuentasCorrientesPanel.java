@@ -12,7 +12,6 @@ import javax.swing.*;
 import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
-import javax.swing.border.TitledBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -21,31 +20,46 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
- * Pantalla 3: Cuentas Corrientes con Libro Mayor / Extracto Histórico (CU-06).
- * Permite monitorear el estado crediticio de cada cliente minorista,
- * auditar cronológicamente cada remito (Debe) y recibo (Haber) con su saldo acumulado,
- * y registrar cobranzas directas a cuenta corriente.
+ * Pantalla 3: Cartera de Clientes y Cuentas Corrientes con Libro Mayor (CU-06).
+ * Al ingresar presenta la tabla maestra de clientes (ordenada por updated_at DESC)
+ * con CRUD para crear y actualizar información comercial y límites de crédito.
+ * Permite seleccionar cualquier cliente para auditar su extracto cronológico (Debe/Haber).
  */
 public class CuentasCorrientesPanel extends JPanel {
+
+    private static final String CARD_LISTA = "LISTA";
+    private static final String CARD_EXTRACTO = "EXTRACTO";
 
     private final IClienteService clienteService;
     private final ICobranzaService cobranzaService;
     private final Runnable onDatosModificados;
 
+    private CardLayout cardLayout;
     private List<Cliente> listaClientes = new ArrayList<>();
     private Cliente clienteSeleccionado;
 
-    // Componente de Búsqueda y Selección Unificado (Autocompletar)
-    private ClienteAutoCompleteBox autoCompleteCliente;
+    // Componentes de la Vista 1: Tabla Maestra de Clientes
+    private DefaultTableModel modelClientes;
+    private JTable tableClientes;
+    private TableRowSorter<DefaultTableModel> sorterClientes;
+    private JTextField txtBuscarCliente;
+    private JLabel lblTotalClientes;
 
-    // Tarjeta de Estado Crediticio del Cliente
+    // Componentes de la Vista 2: Extracto de Cuenta Corriente (Libro Mayor)
+    private ClienteAutoCompleteBox autoCompleteCliente;
+    private JLabel lblTituloClienteExtracto;
     private JLabel lblRazonSocial;
     private JLabel lblCuitZona;
     private JLabel lblSaldoDeudor;
@@ -54,14 +68,13 @@ public class CuentasCorrientesPanel extends JPanel {
     private JLabel lblEstadoBadge;
     private JButton btnCobroDirecto;
 
-    // Tabla del Libro Mayor (Extracto)
     private DefaultTableModel modelExtracto;
     private JTable tableExtracto;
     private JLabel lblTotalDebe;
     private JLabel lblTotalHaber;
     private JLabel lblSaldoFinal;
 
-    private static final DateTimeFormatter FORMATO_FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter FORMATO_FECHA_HORA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     public CuentasCorrientesPanel(IClienteService clienteService, ICobranzaService cobranzaService, Runnable onDatosModificados) {
         this.clienteService = clienteService;
@@ -73,42 +86,367 @@ public class CuentasCorrientesPanel extends JPanel {
     }
 
     private void inicializarUI() {
-        setLayout(new BorderLayout(0, 10));
-        setBorder(new EmptyBorder(12, 14, 14, 14));
+        cardLayout = new CardLayout();
+        setLayout(cardLayout);
         setBackground(new Color(245, 247, 250));
 
-        // 1. Panel Superior: Selector de Cliente y Tarjeta Crediticia
-        JPanel panelNorte = new JPanel(new BorderLayout(0, 8));
-        panelNorte.setOpaque(false);
-        panelNorte.add(crearBarraSeleccionCliente(), BorderLayout.NORTH);
-        panelNorte.add(crearTarjetaCliente(), BorderLayout.CENTER);
-        add(panelNorte, BorderLayout.NORTH);
+        // Vista 1: Catálogo y CRUD de Clientes (Pantalla Principal de Entrada)
+        add(crearVistaListaClientes(), CARD_LISTA);
 
-        // 2. Panel Central: Libro Mayor Cronológico
-        add(crearPanelLibroMayor(), BorderLayout.CENTER);
+        // Vista 2: Libro Mayor / Extracto del Cliente Seleccionado
+        add(crearVistaExtractoCliente(), CARD_EXTRACTO);
+
+        cardLayout.show(this, CARD_LISTA);
     }
 
-    private JPanel crearBarraSeleccionCliente() {
-        JPanel bar = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
-        bar.setBackground(Color.WHITE);
-        bar.setBorder(new CompoundBorder(
+    // =========================================================================
+    // VISTA 1: Catálogo y CRUD de Clientes (Ordenado por updated_at DESC)
+    // =========================================================================
+
+    private JPanel crearVistaListaClientes() {
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        panel.setBorder(new EmptyBorder(12, 14, 14, 14));
+        panel.setBackground(new Color(245, 247, 250));
+
+        // Cabecera y Barra de Herramientas
+        JPanel pNorte = new JPanel(new BorderLayout(0, 8));
+        pNorte.setOpaque(false);
+
+        // Título
+        JPanel pTit = new JPanel(new GridLayout(2, 1, 0, 2));
+        pTit.setOpaque(false);
+
+        JLabel lblTit = new JLabel("👥 Cartera de Clientes y Cuentas Corrientes");
+        lblTit.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
+        lblTit.setForeground(new Color(20, 35, 60));
+
+        JLabel lblSub = new JLabel("Administración comercial de clientes minoristas, líneas de crédito y estados de saldo (ordenado por última actividad):");
+        lblSub.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        lblSub.setForeground(new Color(90, 100, 115));
+
+        pTit.add(lblTit);
+        pTit.add(lblSub);
+        pNorte.add(pTit, BorderLayout.NORTH);
+
+        // Toolbar
+        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 6));
+        toolbar.setBackground(Color.WHITE);
+        toolbar.setBorder(new CompoundBorder(
                 new LineBorder(new Color(218, 224, 233), 1, true),
                 new EmptyBorder(4, 8, 4, 8)
         ));
 
-        JLabel lblBuscar = new JLabel("👤 Cliente (Buscar / Autocompletar):");
-        lblBuscar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
-        bar.add(lblBuscar);
+        toolbar.add(new JLabel("🔍 Buscar:"));
+        txtBuscarCliente = new JTextField(16);
+        txtBuscarCliente.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        txtBuscarCliente.setToolTipText("Filtrado en tiempo real por razón social, CUIT, zona o dirección");
+        txtBuscarCliente.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { aplicarFiltroClientes(); }
+            @Override public void removeUpdate(DocumentEvent e) { aplicarFiltroClientes(); }
+            @Override public void changedUpdate(DocumentEvent e) { aplicarFiltroClientes(); }
+        });
+        toolbar.add(txtBuscarCliente);
 
+        JButton btnNuevo = new JButton("➕ Nuevo Cliente");
+        btnNuevo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnNuevo.setBackground(new Color(22, 101, 52));
+        btnNuevo.setForeground(Color.WHITE);
+        btnNuevo.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnNuevo.addActionListener(e -> abrirModalNuevoCliente());
+        toolbar.add(btnNuevo);
+
+        JButton btnModificar = new JButton("✏️ Modificar");
+        btnModificar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnModificar.setBackground(new Color(15, 60, 130));
+        btnModificar.setForeground(Color.WHITE);
+        btnModificar.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnModificar.addActionListener(e -> abrirModalEditarClienteSeleccionado());
+        toolbar.add(btnModificar);
+
+        JButton btnVerExtracto = new JButton("📖 Ver Cuenta Corriente");
+        btnVerExtracto.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnVerExtracto.setBackground(new Color(90, 45, 130));
+        btnVerExtracto.setForeground(Color.WHITE);
+        btnVerExtracto.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnVerExtracto.addActionListener(e -> abrirExtractoClienteSeleccionado());
+        toolbar.add(btnVerExtracto);
+
+        JButton btnCobrar = new JButton("💵 Cobrar Deuda");
+        btnCobrar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnCobrar.setBackground(new Color(30, 125, 60));
+        btnCobrar.setForeground(Color.WHITE);
+        btnCobrar.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnCobrar.addActionListener(e -> cobrarClienteSeleccionado());
+        toolbar.add(btnCobrar);
+
+        JButton btnRefrescar = new JButton("🔄 Refrescar");
+        btnRefrescar.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        btnRefrescar.addActionListener(e -> recargarClientes(null));
+        toolbar.add(btnRefrescar);
+
+        pNorte.add(toolbar, BorderLayout.CENTER);
+        panel.add(pNorte, BorderLayout.NORTH);
+
+        // Tabla de Clientes
+        String[] cols = {
+                "ID", "Razón Social", "CUIT", "Zona Reparto", "Teléfono", "Dirección",
+                "Saldo Deudor ($)", "Límite Crédito ($)", "Disponible ($)", "Estado", "Últ. Modificación"
+        };
+
+        modelClientes = new DefaultTableModel(cols, 0) {
+            @Override public boolean isCellEditable(int r, int c) { return false; }
+            @Override public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) return Integer.class;
+                if (columnIndex == 6 || columnIndex == 7 || columnIndex == 8) return BigDecimal.class;
+                return String.class;
+            }
+        };
+
+        tableClientes = new JTable(modelClientes);
+        tableClientes.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        tableClientes.setRowHeight(28);
+        tableClientes.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        tableClientes.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        tableClientes.getTableHeader().setReorderingAllowed(false);
+
+        sorterClientes = new TableRowSorter<>(modelClientes);
+        tableClientes.setRowSorter(sorterClientes);
+
+        // Alineación y Renderers
+        DefaultTableCellRenderer centerRender = new DefaultTableCellRenderer();
+        centerRender.setHorizontalAlignment(SwingConstants.CENTER);
+        tableClientes.getColumnModel().getColumn(0).setPreferredWidth(45);
+        tableClientes.getColumnModel().getColumn(0).setCellRenderer(centerRender);
+
+        tableClientes.getColumnModel().getColumn(1).setPreferredWidth(190);
+        tableClientes.getColumnModel().getColumn(2).setPreferredWidth(110);
+        tableClientes.getColumnModel().getColumn(2).setCellRenderer(centerRender);
+
+        tableClientes.getColumnModel().getColumn(3).setPreferredWidth(100);
+        tableClientes.getColumnModel().getColumn(4).setPreferredWidth(110);
+        tableClientes.getColumnModel().getColumn(5).setPreferredWidth(180);
+
+        // Renderers Monetarios
+        DefaultTableCellRenderer renderSaldo = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
+                JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+                l.setHorizontalAlignment(SwingConstants.RIGHT);
+                l.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+                if (value instanceof BigDecimal bd) {
+                    l.setText(String.format("$%,.2f", bd));
+                    l.setForeground(bd.compareTo(BigDecimal.ZERO) > 0 ? new Color(180, 20, 20) : new Color(30, 120, 50));
+                }
+                return l;
+            }
+        };
+        tableClientes.getColumnModel().getColumn(6).setCellRenderer(renderSaldo);
+
+        DefaultTableCellRenderer renderLimite = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
+                JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+                l.setHorizontalAlignment(SwingConstants.RIGHT);
+                if (value instanceof BigDecimal bd) {
+                    l.setText(String.format("$%,.2f", bd));
+                    l.setForeground(new Color(60, 75, 95));
+                }
+                return l;
+            }
+        };
+        tableClientes.getColumnModel().getColumn(7).setCellRenderer(renderLimite);
+
+        DefaultTableCellRenderer renderDisponible = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
+                JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+                l.setHorizontalAlignment(SwingConstants.RIGHT);
+                if (value instanceof BigDecimal bd) {
+                    l.setText(String.format("$%,.2f", bd));
+                    l.setForeground(bd.compareTo(BigDecimal.ZERO) > 0 ? new Color(25, 125, 50) : new Color(180, 20, 20));
+                }
+                return l;
+            }
+        };
+        tableClientes.getColumnModel().getColumn(8).setCellRenderer(renderDisponible);
+
+        // Badge de Estado Crediticio
+        tableClientes.getColumnModel().getColumn(9).setPreferredWidth(100);
+        tableClientes.getColumnModel().getColumn(9).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
+                JLabel l = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
+                l.setHorizontalAlignment(SwingConstants.CENTER);
+                l.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+                String st = value != null ? value.toString() : "";
+                if (st.contains("EXCEDIDO")) {
+                    l.setForeground(new Color(185, 25, 25));
+                } else if (st.contains("RIESGO")) {
+                    l.setForeground(new Color(190, 110, 10));
+                } else {
+                    l.setForeground(new Color(25, 125, 50));
+                }
+                return l;
+            }
+        });
+
+        tableClientes.getColumnModel().getColumn(10).setPreferredWidth(120);
+        tableClientes.getColumnModel().getColumn(10).setCellRenderer(centerRender);
+
+        // Doble click o Enter para abrir cuenta corriente
+        tableClientes.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    abrirExtractoClienteSeleccionado();
+                }
+            }
+        });
+
+        tableClientes.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    e.consume();
+                    abrirExtractoClienteSeleccionado();
+                }
+            }
+        });
+
+        JScrollPane scroll = new JScrollPane(tableClientes);
+        panel.add(scroll, BorderLayout.CENTER);
+
+        // Pie de Tabla
+        JPanel pPie = new JPanel(new BorderLayout());
+        pPie.setOpaque(false);
+        lblTotalClientes = new JLabel("Cargando clientes...");
+        lblTotalClientes.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        lblTotalClientes.setForeground(new Color(90, 100, 115));
+        pPie.add(lblTotalClientes, BorderLayout.WEST);
+
+        JLabel lblTip = new JLabel("💡 Doble clic o [Enter] sobre un cliente para ver su Libro Mayor / Extracto");
+        lblTip.setFont(new Font(Font.SANS_SERIF, Font.ITALIC, 11));
+        lblTip.setForeground(new Color(100, 115, 130));
+        pPie.add(lblTip, BorderLayout.EAST);
+
+        panel.add(pPie, BorderLayout.SOUTH);
+
+        return panel;
+    }
+
+    private void aplicarFiltroClientes() {
+        if (sorterClientes == null) return;
+        String busqueda = txtBuscarCliente.getText().trim();
+        if (busqueda.isEmpty()) {
+            sorterClientes.setRowFilter(null);
+        } else {
+            sorterClientes.setRowFilter(RowFilter.regexFilter("(?i)" + Pattern.quote(busqueda), 1, 2, 3, 5));
+        }
+    }
+
+    private Cliente getClienteDeFilaSeleccionada() {
+        int selectedRow = tableClientes.getSelectedRow();
+        if (selectedRow < 0) return null;
+        int modelRow = tableClientes.convertRowIndexToModel(selectedRow);
+        int idCliente = (Integer) modelClientes.getValueAt(modelRow, 0);
+        return listaClientes.stream()
+                .filter(c -> c.getIdCliente() == idCliente)
+                .findFirst().orElse(null);
+    }
+
+    private void abrirModalNuevoCliente() {
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        ClienteDialog dialog = new ClienteDialog(parent, clienteService, null, () -> {
+            recargarClientes(null);
+            if (onDatosModificados != null) onDatosModificados.run();
+        });
+        dialog.setVisible(true);
+    }
+
+    private void abrirModalEditarClienteSeleccionado() {
+        Cliente c = getClienteDeFilaSeleccionada();
+        if (c == null) {
+            JOptionPane.showMessageDialog(this, "Seleccioná un cliente de la tabla para modificar sus datos.",
+                    "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        Window parent = SwingUtilities.getWindowAncestor(this);
+        ClienteDialog dialog = new ClienteDialog(parent, clienteService, c, () -> {
+            recargarClientes(c);
+            if (onDatosModificados != null) onDatosModificados.run();
+        });
+        dialog.setVisible(true);
+    }
+
+    private void abrirExtractoClienteSeleccionado() {
+        Cliente c = getClienteDeFilaSeleccionada();
+        if (c == null) {
+            JOptionPane.showMessageDialog(this, "Seleccioná un cliente para consultar su extracto de cuenta corriente.",
+                    "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        mostrarExtracto(c);
+    }
+
+    private void cobrarClienteSeleccionado() {
+        Cliente c = getClienteDeFilaSeleccionada();
+        if (c == null) {
+            JOptionPane.showMessageDialog(this, "Seleccioná un cliente para registrar la cobranza de su deuda.",
+                    "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        this.clienteSeleccionado = c;
+        abrirModalCobroDirecto();
+    }
+
+    // =========================================================================
+    // VISTA 2: Extracto de Cuenta Corriente (Libro Mayor)
+    // =========================================================================
+
+    private JPanel crearVistaExtractoCliente() {
+        JPanel panel = new JPanel(new BorderLayout(0, 10));
+        panel.setBorder(new EmptyBorder(12, 14, 14, 14));
+        panel.setBackground(new Color(245, 247, 250));
+
+        // 1. Barra de Navegación y Selector
+        JPanel pNorte = new JPanel(new BorderLayout(0, 8));
+        pNorte.setOpaque(false);
+
+        JPanel pNav = new JPanel(new BorderLayout(12, 0));
+        pNav.setBackground(Color.WHITE);
+        pNav.setBorder(new CompoundBorder(
+                new LineBorder(new Color(218, 224, 233), 1, true),
+                new EmptyBorder(6, 10, 6, 10)
+        ));
+
+        JButton btnVolver = new JButton("⬅️ Volver al Listado de Clientes");
+        btnVolver.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnVolver.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnVolver.addActionListener(e -> cardLayout.show(this, CARD_LISTA));
+        pNav.add(btnVolver, BorderLayout.WEST);
+
+        lblTituloClienteExtracto = new JLabel("📖 Extracto Histórico y Libro Mayor", SwingConstants.CENTER);
+        lblTituloClienteExtracto.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        lblTituloClienteExtracto.setForeground(new Color(20, 35, 60));
+        pNav.add(lblTituloClienteExtracto, BorderLayout.CENTER);
+
+        JPanel pSelectorDer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        pSelectorDer.setOpaque(false);
         autoCompleteCliente = new ClienteAutoCompleteBox();
         autoCompleteCliente.setOnClienteSeleccionadoListener(this::onClienteSeleccionado);
-        bar.add(autoCompleteCliente);
+        pSelectorDer.add(new JLabel("Cambiar:"));
+        pSelectorDer.add(autoCompleteCliente);
+        pNav.add(pSelectorDer, BorderLayout.EAST);
 
-        JButton btnRefrescar = new JButton("🔄 Actualizar");
-        btnRefrescar.addActionListener(e -> recargarClientes(clienteSeleccionado));
-        bar.add(btnRefrescar);
+        pNorte.add(pNav, BorderLayout.NORTH);
+        pNorte.add(crearTarjetaCliente(), BorderLayout.CENTER);
+        panel.add(pNorte, BorderLayout.NORTH);
 
-        return bar;
+        // 2. Panel Central: Libro Mayor Cronológico
+        panel.add(crearPanelLibroMayor(), BorderLayout.CENTER);
+
+        return panel;
     }
 
     private JPanel crearTarjetaCliente() {
@@ -189,7 +527,7 @@ public class CuentasCorrientesPanel extends JPanel {
                 new EmptyBorder(10, 12, 10, 12)
         ));
 
-        JLabel lblTit = new JLabel("📖 Libro Mayor de la Cuenta Corriente (Movimientos Cronológicos)");
+        JLabel lblTit = new JLabel("📖 Movimientos Cronológicos del Libro Mayor (Remitos y Recibos)");
         lblTit.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         lblTit.setForeground(new Color(20, 35, 60));
         panel.add(lblTit, BorderLayout.NORTH);
@@ -209,13 +547,11 @@ public class CuentasCorrientesPanel extends JPanel {
         tableExtracto.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         tableExtracto.setAutoCreateRowSorter(true);
 
-        // Alineaciones y Colores
         DefaultTableCellRenderer centerRender = new DefaultTableCellRenderer();
         centerRender.setHorizontalAlignment(SwingConstants.CENTER);
         tableExtracto.getColumnModel().getColumn(0).setPreferredWidth(130);
         tableExtracto.getColumnModel().getColumn(0).setCellRenderer(centerRender);
 
-        // Renderer Tipo Comprobante con Badge
         tableExtracto.getColumnModel().getColumn(1).setPreferredWidth(90);
         tableExtracto.getColumnModel().getColumn(1).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
@@ -238,7 +574,6 @@ public class CuentasCorrientesPanel extends JPanel {
         tableExtracto.getColumnModel().getColumn(2).setPreferredWidth(140);
         tableExtracto.getColumnModel().getColumn(3).setPreferredWidth(320);
 
-        // Renderers Monetarios
         DefaultTableCellRenderer renderDebe = new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int col) {
@@ -316,29 +651,89 @@ public class CuentasCorrientesPanel extends JPanel {
         return panel;
     }
 
+    public void mostrarExtracto(Cliente c) {
+        if (c == null) return;
+        this.clienteSeleccionado = c;
+        if (autoCompleteCliente != null) {
+            autoCompleteCliente.seleccionarCliente(c);
+        }
+        actualizarTarjetaCliente(c);
+        cargarExtracto(c.getIdCliente());
+        lblTituloClienteExtracto.setText("📖 Extracto Histórico: " + c.getRazonSocial());
+        cardLayout.show(this, CARD_EXTRACTO);
+    }
+
     public void recargarClientes(Cliente seleccionar) {
         try {
             listaClientes = clienteService.listarActivos();
+
+            // 1. Actualizar Tabla Maestra de Clientes
+            modelClientes.setRowCount(0);
+            for (Cliente c : listaClientes) {
+                String badgeEstado;
+                if (c.estaExcedido(BigDecimal.ZERO)) {
+                    badgeEstado = "🔴 EXCEDIDO";
+                } else if (c.getSaldoCuentaCorriente().compareTo(c.getLimiteCredito().multiply(new BigDecimal("0.85"))) >= 0
+                        && c.getLimiteCredito().compareTo(BigDecimal.ZERO) > 0) {
+                    badgeEstado = "⚠️ RIESGO";
+                } else {
+                    badgeEstado = "✅ AL DÍA";
+                }
+
+                String fechaMod = c.getUpdatedAt() != null ? c.getUpdatedAt().format(FORMATO_FECHA_HORA) : "-";
+
+                modelClientes.addRow(new Object[]{
+                        c.getIdCliente(),
+                        c.getRazonSocial(),
+                        c.getCuit(),
+                        c.getZonaReparto(),
+                        c.getTelefono(),
+                        c.getDireccion(),
+                        c.getSaldoCuentaCorriente(),
+                        c.getLimiteCredito(),
+                        c.calcularCreditoDisponible(),
+                        badgeEstado,
+                        fechaMod
+                });
+            }
+
+            lblTotalClientes.setText(String.format("Mostrando %d clientes registrados (ordenados por última modificación descendente).", listaClientes.size()));
+
+            // 2. Actualizar Autocompletar del Extracto
             if (autoCompleteCliente != null) {
                 autoCompleteCliente.setTodosLosClientes(listaClientes);
-                if (seleccionar != null) {
-                    Cliente encontrado = listaClientes.stream()
-                            .filter(c -> c.getIdCliente() == seleccionar.getIdCliente())
-                            .findFirst().orElse(null);
-                    if (encontrado != null) {
-                        autoCompleteCliente.seleccionarCliente(encontrado);
-                    } else if (!listaClientes.isEmpty()) {
-                        autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
-                    } else {
-                        autoCompleteCliente.limpiarSeleccion();
-                    }
-                } else if (!listaClientes.isEmpty()) {
-                    autoCompleteCliente.seleccionarCliente(listaClientes.get(0));
-                }
             }
+
+            // 3. Restaurar selección si existe
+            if (seleccionar != null) {
+                Cliente encontrado = listaClientes.stream()
+                        .filter(c -> c.getIdCliente() == seleccionar.getIdCliente())
+                        .findFirst().orElse(null);
+                if (encontrado != null) {
+                    this.clienteSeleccionado = encontrado;
+                    seleccionarEnTabla(encontrado.getIdCliente());
+                    if (autoCompleteCliente != null) autoCompleteCliente.seleccionarCliente(encontrado);
+                    actualizarTarjetaCliente(encontrado);
+                    cargarExtracto(encontrado.getIdCliente());
+                }
+            } else if (!listaClientes.isEmpty()) {
+                tableClientes.setRowSelectionInterval(0, 0);
+            }
+
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(this, "Error al cargar clientes: " + ex.getMessage(),
                     "Error de Conexión", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void seleccionarEnTabla(int idCliente) {
+        for (int r = 0; r < tableClientes.getRowCount(); r++) {
+            int modelRow = tableClientes.convertRowIndexToModel(r);
+            if ((Integer) modelClientes.getValueAt(modelRow, 0) == idCliente) {
+                tableClientes.setRowSelectionInterval(r, r);
+                tableClientes.scrollRectToVisible(tableClientes.getCellRect(r, 0, true));
+                break;
+            }
         }
     }
 
@@ -349,6 +744,7 @@ public class CuentasCorrientesPanel extends JPanel {
             return;
         }
 
+        lblTituloClienteExtracto.setText("📖 Extracto Histórico: " + c.getRazonSocial());
         actualizarTarjetaCliente(clienteSeleccionado);
         cargarExtracto(clienteSeleccionado.getIdCliente());
     }
@@ -385,7 +781,7 @@ public class CuentasCorrientesPanel extends JPanel {
             List<MovimientoCuentaCorriente> movimientos = clienteService.obtenerExtractoCuentaCorriente(idCliente);
             for (MovimientoCuentaCorriente m : movimientos) {
                 modelExtracto.addRow(new Object[]{
-                        m.getFecha() != null ? m.getFecha().format(FORMATO_FECHA) : "-",
+                        m.getFecha() != null ? m.getFecha().format(FORMATO_FECHA_HORA) : "-",
                         m.getTipo(),
                         m.getComprobante(),
                         m.getConcepto(),
@@ -425,7 +821,8 @@ public class CuentasCorrientesPanel extends JPanel {
     private void abrirModalCobroDirecto() {
         if (clienteSeleccionado == null) return;
 
-        JDialog dialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(this), "Registrar Cobranza a Cuenta Corriente", true);
+        Window parentWindow = SwingUtilities.getWindowAncestor(this);
+        JDialog dialog = new JDialog(parentWindow, "Registrar Cobranza a Cuenta Corriente", Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setLayout(new BorderLayout(10, 10));
         dialog.setSize(440, 360);
         dialog.setLocationRelativeTo(this);
@@ -509,8 +906,7 @@ public class CuentasCorrientesPanel extends JPanel {
 
                 // Recargar datos locales y notificar a la app
                 clienteSeleccionado = clienteService.buscarPorId(clienteSeleccionado.getIdCliente());
-                actualizarTarjetaCliente(clienteSeleccionado);
-                cargarExtracto(clienteSeleccionado.getIdCliente());
+                recargarClientes(clienteSeleccionado);
                 if (onDatosModificados != null) onDatosModificados.run();
 
             } catch (NumberFormatException nfe) {

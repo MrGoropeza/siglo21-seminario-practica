@@ -3,6 +3,7 @@ package com.sgcv.model;
 import com.sgcv.exception.ValidacionException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
@@ -20,6 +21,7 @@ public class Cliente {
     private BigDecimal saldoCuentaCorriente;
     private BigDecimal limiteCredito;
     private boolean activo;
+    private LocalDateTime updatedAt;
 
     public Cliente() {
         this.saldoCuentaCorriente = BigDecimal.ZERO;
@@ -30,6 +32,12 @@ public class Cliente {
     public Cliente(int idCliente, String razonSocial, String cuit, String direccion, 
                    String telefono, String zonaReparto, BigDecimal saldoCuentaCorriente, 
                    BigDecimal limiteCredito, boolean activo) {
+        this(idCliente, razonSocial, cuit, direccion, telefono, zonaReparto, saldoCuentaCorriente, limiteCredito, activo, null);
+    }
+
+    public Cliente(int idCliente, String razonSocial, String cuit, String direccion, 
+                   String telefono, String zonaReparto, BigDecimal saldoCuentaCorriente, 
+                   BigDecimal limiteCredito, boolean activo, LocalDateTime updatedAt) {
         if (razonSocial == null || razonSocial.trim().isEmpty()) {
             throw new ValidacionException("La razón social del cliente es obligatoria.");
         }
@@ -42,6 +50,7 @@ public class Cliente {
         this.saldoCuentaCorriente = saldoCuentaCorriente != null ? saldoCuentaCorriente : BigDecimal.ZERO;
         this.limiteCredito = limiteCredito != null ? limiteCredito : BigDecimal.ZERO;
         this.activo = activo;
+        this.updatedAt = updatedAt;
     }
 
     /**
@@ -108,6 +117,9 @@ public class Cliente {
 
     public boolean isActivo() { return activo; }
     public void setActivo(boolean activo) { this.activo = activo; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
     @Override
     public boolean equals(Object o) {

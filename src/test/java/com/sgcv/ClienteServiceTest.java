@@ -118,12 +118,74 @@ public class ClienteServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("3. Operaciones CRUD de Clientes")
+    class CrudClienteTest {
+
+        @Test
+        @DisplayName("Crear cliente válido genera ID y persiste en DAO")
+        void testCrearClienteValido() throws SQLException {
+            Cliente nuevo = new Cliente(0, "Polleria San Martín", "20-44556677-8",
+                    "San Martín 400", "11-4455-6677", "Zona Sur",
+                    BigDecimal.ZERO, new BigDecimal("350000.00"), true);
+
+            int id = clienteService.crearCliente(nuevo);
+            assertTrue(id > 0);
+            Cliente recuperado = clienteService.buscarPorId(id);
+            assertNotNull(recuperado);
+            assertEquals("Polleria San Martín", recuperado.getRazonSocial());
+            assertEquals(new BigDecimal("350000.00"), recuperado.getLimiteCredito());
+        }
+
+        @Test
+        @DisplayName("Rechazar creación si la razón social es nula o vacía")
+        void testCrearClienteRazonVacia() {
+            Cliente nuevo = new Cliente();
+            nuevo.setCuit("20-11223344-5");
+            nuevo.setLimiteCredito(new BigDecimal("100000.00"));
+
+            assertThrows(ValidacionException.class, () -> clienteService.crearCliente(nuevo));
+        }
+
+        @Test
+        @DisplayName("Actualizar cliente existente modifica sus atributos")
+        void testActualizarCliente() throws SQLException {
+            Cliente c = new Cliente(10, "Granja Original", "30-55667788-9",
+                    "Rivadavia 100", "11-2233-4455", "Zona Oeste",
+                    BigDecimal.ZERO, new BigDecimal("200000.00"), true);
+            clienteDAO.guardar(c);
+
+            c.setRazonSocial("Granja Renovada SRL");
+            c.setLimiteCredito(new BigDecimal("450000.00"));
+            c.setZonaReparto("Zona Norte");
+
+            boolean ok = clienteService.actualizarCliente(c);
+            assertTrue(ok);
+
+            Cliente modificado = clienteService.buscarPorId(10);
+            assertEquals("Granja Renovada SRL", modificado.getRazonSocial());
+            assertEquals(new BigDecimal("450000.00"), modificado.getLimiteCredito());
+            assertEquals("Zona Norte", modificado.getZonaReparto());
+        }
+
+        @Test
+        @DisplayName("Rechazar actualización si el ID es inválido o nulo")
+        void testActualizarClienteInvalido() {
+            Cliente invalido = new Cliente(0, "Polleria Sin ID", "30-11111111-1",
+                    "Calle Falsa 123", "111", "Zona Centro",
+                    BigDecimal.ZERO, new BigDecimal("100000.00"), true);
+
+            assertThrows(ValidacionException.class, () -> clienteService.actualizarCliente(invalido));
+        }
+    }
+
     // =========================================================================
     // Fake DAO para Clientes
     // =========================================================================
 
     private static class FakeClienteDAO implements IClienteDAO {
         private final Map<Integer, Cliente> datos = new HashMap<>();
+        private int nextId = 100;
 
         void guardar(Cliente c) { datos.put(c.getIdCliente(), c); }
 
@@ -132,6 +194,22 @@ public class ClienteServiceTest {
 
         @Override
         public List<Cliente> listarActivos() { return new ArrayList<>(datos.values()); }
+
+        @Override
+        public int crearCliente(Cliente c) {
+            c.setIdCliente(nextId++);
+            guardar(c);
+            return c.getIdCliente();
+        }
+
+        @Override
+        public boolean actualizarCliente(Cliente c) {
+            if (datos.containsKey(c.getIdCliente())) {
+                datos.put(c.getIdCliente(), c);
+                return true;
+            }
+            return false;
+        }
 
         @Override
         public boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) {

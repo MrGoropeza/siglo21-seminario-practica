@@ -20,7 +20,7 @@ public class ClienteDAO implements IClienteDAO {
     @Override
     public Cliente buscarPorId(int idCliente) throws SQLException {
         String sql = "SELECT id_cliente, razon_social, cuit, direccion, telefono, zona_reparto, " +
-                     "saldo_cuenta_corriente, limite_credito, activo FROM clientes WHERE id_cliente = ?";
+                     "saldo_cuenta_corriente, limite_credito, activo, updated_at FROM clientes WHERE id_cliente = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setInt(1, idCliente);
@@ -37,7 +37,8 @@ public class ClienteDAO implements IClienteDAO {
     public List<Cliente> listarActivos() throws SQLException {
         List<Cliente> lista = new ArrayList<>();
         String sql = "SELECT id_cliente, razon_social, cuit, direccion, telefono, zona_reparto, " +
-                     "saldo_cuenta_corriente, limite_credito, activo FROM clientes WHERE activo = TRUE ORDER BY razon_social";
+                     "saldo_cuenta_corriente, limite_credito, activo, updated_at FROM clientes WHERE activo = TRUE " +
+                     "ORDER BY updated_at DESC, id_cliente DESC";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql);
              ResultSet rs = ps.executeQuery()) {
@@ -117,7 +118,58 @@ public class ClienteDAO implements IClienteDAO {
         return extracto;
     }
 
+    @Override
+    public int crearCliente(Cliente cliente) throws SQLException {
+        String sql = "INSERT INTO clientes (razon_social, cuit, direccion, telefono, zona_reparto, saldo_cuenta_corriente, limite_credito, activo) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, cliente.getRazonSocial());
+            ps.setString(2, cliente.getCuit());
+            ps.setString(3, cliente.getDireccion());
+            ps.setString(4, cliente.getTelefono());
+            ps.setString(5, cliente.getZonaReparto());
+            ps.setBigDecimal(6, cliente.getSaldoCuentaCorriente() != null ? cliente.getSaldoCuentaCorriente() : BigDecimal.ZERO);
+            ps.setBigDecimal(7, cliente.getLimiteCredito() != null ? cliente.getLimiteCredito() : BigDecimal.ZERO);
+            ps.setBoolean(8, cliente.isActivo());
+            ps.executeUpdate();
+            try (ResultSet rs = ps.getGeneratedKeys()) {
+                if (rs.next()) {
+                    int id = rs.getInt(1);
+                    cliente.setIdCliente(id);
+                    return id;
+                }
+            }
+        }
+        return 0;
+    }
+
+    @Override
+    public boolean actualizarCliente(Cliente cliente) throws SQLException {
+        String sql = "UPDATE clientes SET razon_social = ?, cuit = ?, direccion = ?, telefono = ?, " +
+                     "zona_reparto = ?, limite_credito = ?, activo = ? WHERE id_cliente = ?";
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, cliente.getRazonSocial());
+            ps.setString(2, cliente.getCuit());
+            ps.setString(3, cliente.getDireccion());
+            ps.setString(4, cliente.getTelefono());
+            ps.setString(5, cliente.getZonaReparto());
+            ps.setBigDecimal(6, cliente.getLimiteCredito() != null ? cliente.getLimiteCredito() : BigDecimal.ZERO);
+            ps.setBoolean(7, cliente.isActivo());
+            ps.setInt(8, cliente.getIdCliente());
+            return ps.executeUpdate() > 0;
+        }
+    }
+
     private Cliente mapearCliente(ResultSet rs) throws SQLException {
+        java.sql.Timestamp ts = null;
+        try {
+            ts = rs.getTimestamp("updated_at");
+        } catch (SQLException ignored) {}
+
+        java.time.LocalDateTime up = ts != null ? ts.toLocalDateTime() : null;
+
         return new Cliente(
             rs.getInt("id_cliente"),
             rs.getString("razon_social"),
@@ -127,7 +179,8 @@ public class ClienteDAO implements IClienteDAO {
             rs.getString("zona_reparto"),
             rs.getBigDecimal("saldo_cuenta_corriente"),
             rs.getBigDecimal("limite_credito"),
-            rs.getBoolean("activo")
+            rs.getBoolean("activo"),
+            up
         );
     }
 }

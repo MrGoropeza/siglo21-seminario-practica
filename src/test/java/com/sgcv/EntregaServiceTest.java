@@ -310,6 +310,22 @@ public class EntregaServiceTest {
         public List<Cliente> listarActivos() { return new ArrayList<>(repo.values()); }
 
         @Override
+        public int crearCliente(Cliente c) {
+            c.setIdCliente(repo.size() + 1);
+            guardar(c);
+            return c.getIdCliente();
+        }
+
+        @Override
+        public boolean actualizarCliente(Cliente c) {
+            if (repo.containsKey(c.getIdCliente())) {
+                repo.put(c.getIdCliente(), c);
+                return true;
+            }
+            return false;
+        }
+
+        @Override
         public boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) {
             Cliente c = repo.get(idCliente);
             if (c != null) {

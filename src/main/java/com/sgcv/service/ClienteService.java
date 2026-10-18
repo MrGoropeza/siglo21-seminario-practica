@@ -44,6 +44,33 @@ public class ClienteService implements IClienteService {
     }
 
     @Override
+    public int crearCliente(Cliente cliente) throws SQLException {
+        validarCliente(cliente);
+        return clienteDAO.crearCliente(cliente);
+    }
+
+    @Override
+    public boolean actualizarCliente(Cliente cliente) throws SQLException {
+        if (cliente == null || cliente.getIdCliente() <= 0) {
+            throw new ValidacionException("Debe especificar un cliente válido para actualizar.");
+        }
+        validarCliente(cliente);
+        return clienteDAO.actualizarCliente(cliente);
+    }
+
+    private void validarCliente(Cliente cliente) {
+        if (cliente == null) {
+            throw new ValidacionException("Los datos del cliente no pueden ser nulos.");
+        }
+        if (cliente.getRazonSocial() == null || cliente.getRazonSocial().trim().isEmpty()) {
+            throw new ValidacionException("La razón social del cliente es obligatoria.");
+        }
+        if (cliente.getLimiteCredito() != null && cliente.getLimiteCredito().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El límite de crédito no puede ser negativo.");
+        }
+    }
+
+    @Override
     public List<com.sgcv.model.MovimientoCuentaCorriente> obtenerExtractoCuentaCorriente(int idCliente) throws SQLException {
         return clienteDAO.obtenerExtractoCuentaCorriente(idCliente);
     }

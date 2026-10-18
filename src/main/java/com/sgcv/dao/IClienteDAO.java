@@ -38,6 +38,22 @@ public interface IClienteDAO {
     boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) throws SQLException;
 
     /**
+     * Registra un nuevo cliente minorista en la base de datos.
+     * @param cliente datos del nuevo cliente
+     * @return ID generado autoincremental
+     * @throws SQLException ante errores SQL
+     */
+    int crearCliente(Cliente cliente) throws SQLException;
+
+    /**
+     * Actualiza la información comercial y crediticia de un cliente existente.
+     * @param cliente datos a actualizar
+     * @return true si se actualizó el registro
+     * @throws SQLException ante errores SQL
+     */
+    boolean actualizarCliente(Cliente cliente) throws SQLException;
+
+    /**
      * Obtiene el extracto histórico cronológico (Libro Mayor) de la cuenta corriente del cliente.
      * @param idCliente ID del cliente
      * @return lista de movimientos con Debe, Haber y Saldo

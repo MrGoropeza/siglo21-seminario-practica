@@ -36,6 +36,22 @@ public interface IClienteService {
     boolean verificarRiesgoCrediticio(int idCliente, BigDecimal montoNuevo) throws SQLException;
 
     /**
+     * Registra un nuevo cliente con sus invariantes comerciales validadas.
+     * @param cliente datos del nuevo cliente
+     * @return ID autogenerado
+     * @throws SQLException ante errores SQL
+     */
+    int crearCliente(Cliente cliente) throws SQLException;
+
+    /**
+     * Actualiza la información de un cliente existente con validación de reglas de negocio.
+     * @param cliente cliente a modificar
+     * @return true si se actualizó correctamente
+     * @throws SQLException ante errores SQL
+     */
+    boolean actualizarCliente(Cliente cliente) throws SQLException;
+
+    /**
      * Obtiene el extracto histórico cronológico (Libro Mayor) de la cuenta corriente.
      * @param idCliente identificador del cliente
      * @return lista de movimientos con Debe, Haber y Saldo
