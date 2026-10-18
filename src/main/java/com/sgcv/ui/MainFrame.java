@@ -24,6 +24,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -501,11 +503,17 @@ public class MainFrame extends JFrame {
         pForm.add(new JLabel("Código Único:"));
         JTextField txtCodigo = new JTextField(esEdicion ? existente.getCodigo() : "");
         txtCodigo.setToolTipText("Ejemplo: POLL-ENT-20, PATA-MUS-15, PECH-SUP-15");
+        txtCodigo.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtCodigo::selectAll); }
+        });
         if (esEdicion) txtCodigo.setEditable(false);
         pForm.add(txtCodigo);
 
         pForm.add(new JLabel("Descripción Comercial:"));
         JTextField txtDesc = new JTextField(esEdicion ? existente.getDescripcion() : "");
+        txtDesc.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtDesc::selectAll); }
+        });
         pForm.add(txtDesc);
 
         pForm.add(new JLabel("Tipo Comercial:"));
@@ -520,22 +528,39 @@ public class MainFrame extends JFrame {
 
         pForm.add(new JLabel("Unidad de Embalaje:"));
         JTextField txtEmbalaje = new JTextField(esEdicion ? existente.getUnidadEmbalaje() : "Caja x 20kg");
+        txtEmbalaje.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtEmbalaje::selectAll); }
+        });
         pForm.add(txtEmbalaje);
 
         pForm.add(new JLabel("Costo de Reposición ($):"));
-        JTextField txtCosto = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioCostoReposicion()).replace(",", ".") : "0.00");
+        JTextField txtCosto = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioCostoReposicion()).replace(",", ".") : "");
+        txtCosto.setToolTipText("Ejemplo: 28000 o 28000.50");
+        txtCosto.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtCosto::selectAll); }
+        });
         pForm.add(txtCosto);
 
         pForm.add(new JLabel("Precio de Venta Base ($):"));
-        JTextField txtPrecio = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioVentaBase()).replace(",", ".") : "0.00");
+        JTextField txtPrecio = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioVentaBase()).replace(",", ".") : "");
+        txtPrecio.setToolTipText("Ejemplo: 35000 o 35000.00");
+        txtPrecio.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtPrecio::selectAll); }
+        });
         pForm.add(txtPrecio);
 
         pForm.add(new JLabel("Stock Depósito (bultos):"));
-        JTextField txtStock = new JTextField(esEdicion ? String.valueOf(existente.getStockDeposito()) : "50");
+        JTextField txtStock = new JTextField(esEdicion ? String.valueOf(existente.getStockDeposito()) : "0");
+        txtStock.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtStock::selectAll); }
+        });
         pForm.add(txtStock);
 
         pForm.add(new JLabel("Stock Mínimo de Alerta:"));
-        JTextField txtStockMin = new JTextField(esEdicion ? String.valueOf(existente.getStockMinimoAlerta()) : "10");
+        JTextField txtStockMin = new JTextField(esEdicion ? String.valueOf(existente.getStockMinimoAlerta()) : "5");
+        txtStockMin.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtStockMin::selectAll); }
+        });
         pForm.add(txtStockMin);
 
         pForm.add(new JLabel("Estado:"));
@@ -559,8 +584,14 @@ public class MainFrame extends JFrame {
                 String emb = txtEmbalaje.getText().trim();
                 BigDecimal costo = parseMonto(txtCosto.getText());
                 BigDecimal precio = parseMonto(txtPrecio.getText());
-                int stock = Integer.parseInt(txtStock.getText().trim());
-                int stockMin = Integer.parseInt(txtStockMin.getText().trim());
+                if (precio.compareTo(BigDecimal.ZERO) <= 0) {
+                    JOptionPane.showMessageDialog(dialog, "El precio de venta base debe ser mayor a cero.", "Validación", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                String strStock = txtStock.getText().trim();
+                int stock = strStock.isEmpty() ? 0 : Integer.parseInt(strStock);
+                String strStockMin = txtStockMin.getText().trim();
+                int stockMin = strStockMin.isEmpty() ? 0 : Integer.parseInt(strStockMin);
                 boolean activo = chkActivo.isSelected();
 
                 boolean esPromo = comboTipo.getSelectedIndex() == 1;

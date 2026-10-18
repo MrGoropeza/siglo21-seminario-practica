@@ -307,7 +307,6 @@ public class EntregaPanel extends JPanel {
             cantidadesPrevias.put(entry.getKey(), entry.getValue().cantidad);
         }
 
-        panelMatrizBultos.removeAll();
         articulosControles.clear();
 
         for (Articulo art : listaArticulos) {
@@ -316,7 +315,6 @@ public class EntregaPanel extends JPanel {
                 ctrl.setCantidad(cantidadesPrevias.get(art.getIdArticulo()));
             }
             articulosControles.put(art.getIdArticulo(), ctrl);
-            panelMatrizBultos.add(ctrl.panel);
         }
 
         filtrarTarjetasBultos();
@@ -326,13 +324,21 @@ public class EntregaPanel extends JPanel {
         String filtro = txtBuscarBulto != null ? txtBuscarBulto.getText().trim().toLowerCase() : "";
         boolean soloSeleccionados = chkSoloSeleccionados != null && chkSoloSeleccionados.isSelected();
 
-        for (ArticuloControl ctrl : articulosControles.values()) {
+        panelMatrizBultos.removeAll();
+
+        for (Articulo art : listaArticulos) {
+            ArticuloControl ctrl = articulosControles.get(art.getIdArticulo());
+            if (ctrl == null) continue;
+
             boolean coincideTexto = filtro.isEmpty() ||
-                    ctrl.articulo.getCodigo().toLowerCase().contains(filtro) ||
-                    ctrl.articulo.getDescripcion().toLowerCase().contains(filtro);
+                    art.getCodigo().toLowerCase().contains(filtro) ||
+                    art.getDescripcion().toLowerCase().contains(filtro);
             boolean coincideSeleccion = !soloSeleccionados || ctrl.cantidad > 0;
 
-            ctrl.panel.setVisible(coincideTexto && coincideSeleccion);
+            if (coincideTexto && coincideSeleccion) {
+                ctrl.panel.setVisible(true);
+                panelMatrizBultos.add(ctrl.panel);
+            }
         }
 
         panelMatrizBultos.revalidate();
@@ -525,6 +531,9 @@ public class EntregaPanel extends JPanel {
         txtCobroEfectivo = new JTextField("0.00");
         txtCobroEfectivo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         txtCobroEfectivo.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtCobroEfectivo.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtCobroEfectivo::selectAll); }
+        });
         txtCobroEfectivo.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { recalcularParada(); }
             @Override public void removeUpdate(DocumentEvent e) { recalcularParada(); }
@@ -536,6 +545,9 @@ public class EntregaPanel extends JPanel {
         txtCobroTransferencia = new JTextField("0.00");
         txtCobroTransferencia.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         txtCobroTransferencia.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtCobroTransferencia.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtCobroTransferencia::selectAll); }
+        });
         txtCobroTransferencia.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { recalcularParada(); }
             @Override public void removeUpdate(DocumentEvent e) { recalcularParada(); }

@@ -16,6 +16,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -166,6 +168,9 @@ public class ArqueoPanel extends JPanel {
         pForm.add(new JLabel("Saldo Inicial en Camioneta (Cambio):"));
         txtSaldoInicial = new JTextField("50000.00");
         txtSaldoInicial.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtSaldoInicial.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtSaldoInicial::selectAll); }
+        });
         txtSaldoInicial.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { recalcularCuadre(); }
             @Override public void removeUpdate(DocumentEvent e) { recalcularCuadre(); }
@@ -184,6 +189,9 @@ public class ArqueoPanel extends JPanel {
         pForm.add(new JLabel("(-) Gastos Efectivo (Peajes/Combustible):"));
         txtGastosEfectivo = new JTextField("0.00");
         txtGastosEfectivo.setHorizontalAlignment(SwingConstants.RIGHT);
+        txtGastosEfectivo.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtGastosEfectivo::selectAll); }
+        });
         txtGastosEfectivo.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { recalcularCuadre(); }
             @Override public void removeUpdate(DocumentEvent e) { recalcularCuadre(); }
@@ -207,6 +215,9 @@ public class ArqueoPanel extends JPanel {
         txtEfectivoReal.setHorizontalAlignment(SwingConstants.RIGHT);
         txtEfectivoReal.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 16));
         txtEfectivoReal.setBackground(new Color(255, 253, 230));
+        txtEfectivoReal.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtEfectivoReal::selectAll); }
+        });
         txtEfectivoReal.getDocument().addDocumentListener(new DocumentListener() {
             @Override public void insertUpdate(DocumentEvent e) { recalcularCuadre(); }
             @Override public void removeUpdate(DocumentEvent e) { recalcularCuadre(); }

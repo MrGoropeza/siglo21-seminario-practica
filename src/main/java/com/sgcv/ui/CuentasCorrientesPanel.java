@@ -19,6 +19,8 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.format.DateTimeFormatter;
@@ -479,6 +481,9 @@ public class CuentasCorrientesPanel extends JPanel {
         pForm.add(new JLabel("Importe a Cobrar ($):"));
         JTextField txtMonto = new JTextField(String.format("%.2f", clienteSeleccionado.getSaldoCuentaCorriente()).replace(",", "."));
         txtMonto.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
+        txtMonto.addFocusListener(new FocusAdapter() {
+            @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtMonto::selectAll); }
+        });
         pForm.add(txtMonto);
 
         pForm.add(new JLabel("N° Referencia / Comp.:"));
@@ -501,7 +506,12 @@ public class CuentasCorrientesPanel extends JPanel {
         btnGuardar.setForeground(Color.WHITE);
         btnGuardar.addActionListener(e -> {
             try {
-                String strMonto = txtMonto.getText().trim().replace("$", "").replace(".", "").replace(",", ".");
+                String strMonto = txtMonto.getText().trim().replace("$", "").replace(" ", "");
+                if (strMonto.contains(",") && strMonto.contains(".")) {
+                    strMonto = strMonto.replace(".", "").replace(",", ".");
+                } else if (strMonto.contains(",")) {
+                    strMonto = strMonto.replace(",", ".");
+                }
                 BigDecimal monto = new BigDecimal(strMonto);
                 if (monto.compareTo(BigDecimal.ZERO) <= 0) {
                     JOptionPane.showMessageDialog(dialog, "El monto debe ser mayor a cero.", "Validación", JOptionPane.WARNING_MESSAGE);
