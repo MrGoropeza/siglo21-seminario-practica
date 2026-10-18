@@ -51,7 +51,7 @@ public class ClienteDAO implements IClienteDAO {
 
     @Override
     public boolean actualizarSaldo(int idCliente, BigDecimal variacion, Connection conn) throws SQLException {
-        String sql = "UPDATE clientes SET saldo_cuenta_corriente = saldo_cuenta_corriente + ? WHERE id_cliente = ?";
+        String sql = "UPDATE clientes SET saldo_cuenta_corriente = saldo_cuenta_corriente + ?, updated_at = CURRENT_TIMESTAMP WHERE id_cliente = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setBigDecimal(1, variacion);
             ps.setInt(2, idCliente);
@@ -147,7 +147,7 @@ public class ClienteDAO implements IClienteDAO {
     @Override
     public boolean actualizarCliente(Cliente cliente) throws SQLException {
         String sql = "UPDATE clientes SET razon_social = ?, cuit = ?, direccion = ?, telefono = ?, " +
-                     "zona_reparto = ?, limite_credito = ?, activo = ? WHERE id_cliente = ?";
+                     "zona_reparto = ?, limite_credito = ?, activo = ?, updated_at = CURRENT_TIMESTAMP WHERE id_cliente = ?";
         try (Connection conn = DatabaseConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, cliente.getRazonSocial());

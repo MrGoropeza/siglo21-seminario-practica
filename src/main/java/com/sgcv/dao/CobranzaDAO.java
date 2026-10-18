@@ -75,10 +75,10 @@ public class CobranzaDAO implements ICobranzaDAO {
             psDet.executeBatch();
         }
 
-        // Actualizar saldo deudor de la cuenta corriente del cliente (reduce saldo)
+        // Actualizar saldo deudor de la cuenta corriente del cliente (reduce saldo) y fecha de actividad
         String sqlUpdateCliente = """
                 UPDATE clientes
-                SET saldo_cuenta_corriente = saldo_cuenta_corriente - ?
+                SET saldo_cuenta_corriente = saldo_cuenta_corriente - ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id_cliente = ?
                 """;
 

@@ -205,6 +205,7 @@ public class ClienteServiceTest {
         @Override
         public boolean actualizarCliente(Cliente c) {
             if (datos.containsKey(c.getIdCliente())) {
+                c.setUpdatedAt(java.time.LocalDateTime.now());
                 datos.put(c.getIdCliente(), c);
                 return true;
             }
@@ -216,6 +217,7 @@ public class ClienteServiceTest {
             Cliente c = datos.get(idCliente);
             if (c != null) {
                 c.setSaldoCuentaCorriente(c.getSaldoCuentaCorriente().add(variacion));
+                c.setUpdatedAt(java.time.LocalDateTime.now());
                 return true;
             }
             return false;

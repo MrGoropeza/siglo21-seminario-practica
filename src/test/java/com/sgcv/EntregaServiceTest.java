@@ -319,6 +319,7 @@ public class EntregaServiceTest {
         @Override
         public boolean actualizarCliente(Cliente c) {
             if (repo.containsKey(c.getIdCliente())) {
+                c.setUpdatedAt(java.time.LocalDateTime.now());
                 repo.put(c.getIdCliente(), c);
                 return true;
             }
@@ -330,6 +331,7 @@ public class EntregaServiceTest {
             Cliente c = repo.get(idCliente);
             if (c != null) {
                 c.setSaldoCuentaCorriente(c.getSaldoCuentaCorriente().add(variacion));
+                c.setUpdatedAt(java.time.LocalDateTime.now());
                 return true;
             }
             return false;
