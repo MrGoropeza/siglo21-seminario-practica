@@ -220,8 +220,8 @@ public class ArqueoDAO implements IArqueoDAO {
                 }
             }
 
-            // Saldo inicial típico de cambio en mano (configurable)
-            dto.setSaldoInicialEfectivo(new BigDecimal("50000.00"));
+            // Saldo inicial de cambio en mano (por defecto 0.00)
+            dto.setSaldoInicialEfectivo(BigDecimal.ZERO);
             dto.recalcularEfectivoEsperado();
         }
 

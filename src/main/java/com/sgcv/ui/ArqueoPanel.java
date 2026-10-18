@@ -195,7 +195,7 @@ public class ArqueoPanel extends JPanel {
 
         // Fila 1: Saldo Inicial de Cambio
         pCentro.add(crearFilaConcepto("Saldo Inicial (Fondo de Cambio):",
-                txtSaldoInicial = crearCampoMonto("50000.00", false, "Dinero con el que salió la camioneta a la mañana")));
+                txtSaldoInicial = crearCampoMonto("0.00", false, "Dinero con el que salió la camioneta a la mañana")));
 
         // Fila 2: (+) Cobranzas en Efectivo Hoy
         lblEfectivoCobrado = new JLabel("$0.00", SwingConstants.RIGHT);
@@ -551,7 +551,7 @@ public class ArqueoPanel extends JPanel {
     private void recalcularCuadre() {
         if (resumenActual == null) return;
 
-        BigDecimal saldoIni = parseMonto(txtSaldoInicial.getText(), new BigDecimal("50000.00"));
+        BigDecimal saldoIni = parseMonto(txtSaldoInicial.getText(), BigDecimal.ZERO);
         BigDecimal gastos = parseMonto(txtGastosEfectivo.getText(), BigDecimal.ZERO);
         BigDecimal efecCobrado = resumenActual.getCobranzasEfectivoTotal();
 
@@ -631,7 +631,7 @@ public class ArqueoPanel extends JPanel {
             return;
         }
 
-        BigDecimal saldoIni = parseMonto(txtSaldoInicial.getText(), new BigDecimal("50000.00"));
+        BigDecimal saldoIni = parseMonto(txtSaldoInicial.getText(), BigDecimal.ZERO);
         BigDecimal gastos = parseMonto(txtGastosEfectivo.getText(), BigDecimal.ZERO);
         BigDecimal efecCobrado = resumenActual.getCobranzasEfectivoTotal();
         BigDecimal esperado = saldoIni.add(efecCobrado).subtract(gastos);
