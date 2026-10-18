@@ -110,17 +110,17 @@ public class MainFrame extends JFrame {
         JMenu menuVistas = new JMenu("Navegación");
         menuVistas.setMnemonic(KeyEvent.VK_N);
 
-        JMenuItem itemTab1 = new JMenuItem("1. Registro de Entregas (CU-01)");
+        JMenuItem itemTab1 = new JMenuItem("1. Registro de Entregas");
         itemTab1.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_1, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab1.addActionListener(e -> tabbedPane.setSelectedIndex(0));
         menuVistas.add(itemTab1);
 
-        JMenuItem itemTab2 = new JMenuItem("2. Monitor de Cuentas Corrientes (CU-06)");
+        JMenuItem itemTab2 = new JMenuItem("2. Cuentas Corrientes y Créditos");
         itemTab2.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_2, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab2.addActionListener(e -> tabbedPane.setSelectedIndex(1));
         menuVistas.add(itemTab2);
 
-        JMenuItem itemTab3 = new JMenuItem("3. Inventario y Stock (CU-05)");
+        JMenuItem itemTab3 = new JMenuItem("3. Inventario de Mercadería");
         itemTab3.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_3, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         itemTab3.addActionListener(e -> tabbedPane.setSelectedIndex(2));
         menuVistas.add(itemTab3);
@@ -150,13 +150,13 @@ public class MainFrame extends JFrame {
 
         // Pestaña 1: Registro de Entregas
         entregaPanel = new EntregaPanel(entregaService, clienteService, articuloService);
-        tabbedPane.addTab("🚚 Registro de Entregas en Ruta (CU-01)", entregaPanel);
+        tabbedPane.addTab("🚚 Registro de Entregas", entregaPanel);
 
         // Pestaña 2: Cuentas Corrientes
-        tabbedPane.addTab("💳 Monitor de Cuentas Corrientes (CU-06)", crearPanelCuentasCorrientes());
+        tabbedPane.addTab("💳 Cuentas Corrientes", crearPanelCuentasCorrientes());
 
         // Pestaña 3: Inventario
-        tabbedPane.addTab("📦 Inventario y Stock en Depósito (CU-05)", crearPanelInventario());
+        tabbedPane.addTab("📦 Inventario de Mercadería", crearPanelInventario());
 
         add(tabbedPane, BorderLayout.CENTER);
     }
@@ -370,13 +370,15 @@ public class MainFrame extends JFrame {
         });
         toolbar.add(txtBuscarArticulo);
 
-        JButton btnOrdenarMergeSort = new JButton("🔄 Ordenar por Stock (MergeSort)");
+        JButton btnOrdenarMergeSort = new JButton("🔄 Ordenar por Stock");
         btnOrdenarMergeSort.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnOrdenarMergeSort.setToolTipText("Ordenar productos de menor a mayor stock físico");
         btnOrdenarMergeSort.addActionListener(e -> ejecutarMergeSortEnPantalla());
         toolbar.add(btnOrdenarMergeSort);
 
-        JButton btnBusquedaBinaria = new JButton("⚡ Búsqueda Binaria por Código");
+        JButton btnBusquedaBinaria = new JButton("⚡ Ir a Código");
         btnBusquedaBinaria.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnBusquedaBinaria.setToolTipText("Buscar y resaltar producto por su código");
         btnBusquedaBinaria.addActionListener(e -> ejecutarBusquedaBinariaEnPantalla());
         toolbar.add(btnBusquedaBinaria);
 
@@ -503,7 +505,7 @@ public class MainFrame extends JFrame {
         List<Articulo> ordenados = articuloService.ordenarPorStockAscendente(articulosMemoria);
         poblarTablaInventario(ordenados);
 
-        lblStatusInventario.setText("✅ Catálogo ordenado por stock físico ascendente mediante MergeSort O(n log n).");
+        lblStatusInventario.setText("✅ Catálogo ordenado por stock en depósito (de menor a mayor).");
         lblStatusInventario.setForeground(new Color(25, 135, 84));
     }
 
@@ -516,8 +518,8 @@ public class MainFrame extends JFrame {
         String codigoBuscado = txtBuscarArticulo.getText().trim();
         if (codigoBuscado.isEmpty()) {
             codigoBuscado = JOptionPane.showInputDialog(this,
-                    "Ingrese el código a buscar mediante Búsqueda Binaria O(log n):",
-                    "Búsqueda Binaria", JOptionPane.QUESTION_MESSAGE);
+                    "Ingrese el código del producto a localizar en inventario:",
+                    "Localizar Producto", JOptionPane.QUESTION_MESSAGE);
             if (codigoBuscado == null || codigoBuscado.trim().isEmpty()) {
                 return;
             }
@@ -544,12 +546,12 @@ public class MainFrame extends JFrame {
             }
 
             lblStatusInventario.setText(String.format(
-                    "✅ Búsqueda Binaria: Artículo '%s - %s' localizado (Stock: %d bultos | $%s).",
+                    "✅ Producto '%s - %s' localizado (Stock: %d bultos | $%s).",
                     encontrado.getCodigo(), encontrado.getDescripcion(),
                     encontrado.getStockDeposito(), encontrado.getPrecioVentaBase()));
             lblStatusInventario.setForeground(new Color(25, 135, 84));
         } else {
-            lblStatusInventario.setText("⚠️ Búsqueda Binaria: No se halló ningún artículo con código '" + codigoBuscado + "'.");
+            lblStatusInventario.setText("⚠️ No se encontró ningún producto con el código '" + codigoBuscado + "'.");
             lblStatusInventario.setForeground(new Color(220, 53, 69));
         }
     }

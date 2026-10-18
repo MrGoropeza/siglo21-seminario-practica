@@ -295,7 +295,7 @@ public class EntregaPanel extends JPanel {
         lblSubtotalBase.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
         lblSubtotalBase.setForeground(new Color(80, 90, 105));
 
-        lblDescuentoBonif = new JLabel("Bonificación Polimórfica Aplicada: $0.00");
+        lblDescuentoBonif = new JLabel("Descuento por Volumen: $0.00");
         lblDescuentoBonif.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         lblDescuentoBonif.setForeground(new Color(30, 130, 60));
 
@@ -399,7 +399,7 @@ public class EntregaPanel extends JPanel {
                     new EmptyBorder(8, 14, 8, 14)
             ));
             lblCardCredito.setText(String.format(
-                    "<html><b style='color:#b71c1c;'>⚠️ ALERTA: LÍMITE DE CRÉDITO EXCEDIDO (CU-01 S10)</b> &nbsp;|&nbsp; " +
+                    "<html><b style='color:#b71c1c;'>⚠️ ALERTA: LÍMITE DE CRÉDITO EXCEDIDO</b> &nbsp;|&nbsp; " +
                     "Saldo Deudor: <b>$%s</b> &nbsp;|&nbsp; Límite Autorizado: <b>$%s</b> &nbsp;|&nbsp; " +
                     "<span style='color:#b71c1c;'><b>Exceso Proyectado: $%s</b></span></html>",
                     saldo, limite, exceso
@@ -505,13 +505,13 @@ public class EntregaPanel extends JPanel {
         lblSubtotalBase.setText("Subtotal Tarifa Lista: $" + subtotalLista.setScale(2, RoundingMode.HALF_UP));
 
         if (bonificacionTotal.compareTo(BigDecimal.ZERO) > 0) {
-            lblDescuentoBonif.setText("Bonificación Polimórfica Aplicada: -$" + bonificacionTotal.setScale(2, RoundingMode.HALF_UP) + " (Ahorro Cliente)");
+            lblDescuentoBonif.setText("Descuento por Volumen: -$" + bonificacionTotal.setScale(2, RoundingMode.HALF_UP) + " (Ahorro Cliente)");
             lblDescuentoBonif.setForeground(new Color(30, 130, 60));
         } else if (bonificacionTotal.compareTo(BigDecimal.ZERO) < 0) {
             lblDescuentoBonif.setText("Recargo Logística Cadena de Frío: +$" + bonificacionTotal.abs().setScale(2, RoundingMode.HALF_UP));
             lblDescuentoBonif.setForeground(new Color(180, 80, 20));
         } else {
-            lblDescuentoBonif.setText("Bonificación / Recargos Especiales: $0.00");
+            lblDescuentoBonif.setText("Descuento por Volumen: $0.00");
             lblDescuentoBonif.setForeground(new Color(80, 90, 105));
         }
 
@@ -543,7 +543,7 @@ public class EntregaPanel extends JPanel {
         } catch (LimiteCreditoExcedidoException lce) {
             int resp = JOptionPane.showConfirmDialog(this,
                     lce.getMessage() + "\n\n¿Desea autorizar excepcionalmente la entrega en ruta como supervisor?",
-                    "Alerta de Riesgo Crediticio (CU-01 S10)",
+                    "Alerta de Límite de Crédito",
                     JOptionPane.YES_NO_OPTION,
                     JOptionPane.WARNING_MESSAGE);
 
