@@ -14,7 +14,7 @@ public interface IArticuloDAO {
     /**
      * Recupera un artículo por su identificador primario.
      * @param idArticulo ID único
-     * @return instancia especializada (ArticuloFresco o ArticuloCongelado) o null si no existe.
+     * @return instancia especializada (ArticuloPromocional o ArticuloEstandar) o null si no existe.
      * @throws SQLException ante fallas de persistencia
      */
     Articulo buscarPorId(int idArticulo) throws SQLException;

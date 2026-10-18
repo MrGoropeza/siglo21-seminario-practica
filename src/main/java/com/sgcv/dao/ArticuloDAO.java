@@ -1,8 +1,8 @@
 package com.sgcv.dao;
 
 import com.sgcv.model.Articulo;
-import com.sgcv.model.ArticuloCongelado;
-import com.sgcv.model.ArticuloFresco;
+import com.sgcv.model.ArticuloEstandar;
+import com.sgcv.model.ArticuloPromocional;
 import com.sgcv.util.DatabaseConnection;
 
 import java.math.BigDecimal;
@@ -15,7 +15,8 @@ import java.util.List;
 
 /**
  * Data Access Object para la entidad Articulo implementando IArticuloDAO.
- * Materializa instancias polimórficas (ArticuloFresco o ArticuloCongelado) según la categoría del producto.
+ * Materializa instancias polimórficas (ArticuloPromocional o ArticuloEstandar)
+ * en concordancia exacta con la tabla relacional 'articulos' y el DER original.
  */
 public class ArticuloDAO implements IArticuloDAO {
 
@@ -75,15 +76,13 @@ public class ArticuloDAO implements IArticuloDAO {
         boolean activo = rs.getBoolean("activo");
 
         String codUpper = codigo != null ? codigo.toUpperCase() : "";
-        if (codUpper.startsWith("PECH") || codUpper.startsWith("MILA")) {
-            return new ArticuloCongelado(
-                    id, codigo, descripcion, unidadEmbalaje, costo, venta, stock, stockMin, activo,
-                    -18.0, new BigDecimal("3.00")
+        if (codUpper.startsWith("POLL-ENT") || codUpper.startsWith("PATA-MUS")) {
+            return new ArticuloPromocional(
+                    id, codigo, descripcion, unidadEmbalaje, costo, venta, stock, stockMin, activo
             );
         } else {
-            return new ArticuloFresco(
-                    id, codigo, descripcion, unidadEmbalaje, costo, venta, stock, stockMin, activo,
-                    7, 4.0
+            return new ArticuloEstandar(
+                    id, codigo, descripcion, unidadEmbalaje, costo, venta, stock, stockMin, activo
             );
         }
     }

@@ -1,8 +1,8 @@
 package com.sgcv;
 
 import com.sgcv.model.Articulo;
-import com.sgcv.model.ArticuloCongelado;
-import com.sgcv.model.ArticuloFresco;
+import com.sgcv.model.ArticuloEstandar;
+import com.sgcv.model.ArticuloPromocional;
 import com.sgcv.service.ArticuloService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,10 +29,10 @@ public class AlgoritmosArticuloTest {
     private Articulo crearArticulo(int id, String codigo, String descripcion, int stock) {
         BigDecimal costo = new BigDecimal("1000.00");
         BigDecimal venta = new BigDecimal("1500.00");
-        if (codigo.startsWith("PECH") || codigo.startsWith("MILA")) {
-            return new ArticuloCongelado(id, codigo, descripcion, "Bulto", costo, venta, stock, 10, true);
+        if (codigo.startsWith("POLL-ENT") || codigo.startsWith("PATA-MUS")) {
+            return new ArticuloPromocional(id, codigo, descripcion, "Bulto", costo, venta, stock, 10, true);
         } else {
-            return new ArticuloFresco(id, codigo, descripcion, "Bulto", costo, venta, stock, 10, true);
+            return new ArticuloEstandar(id, codigo, descripcion, "Bulto", costo, venta, stock, 10, true);
         }
     }
 

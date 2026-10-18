@@ -61,8 +61,8 @@ public class MainFrame extends JFrame {
     private JTextField txtBuscarArticulo;
     private JLabel lblStatusInventario;
     private JLabel lblKpiTotalBultos;
-    private JLabel lblKpiBultosFrescos;
-    private JLabel lblKpiBultosCongelados;
+    private JLabel lblKpiEstandar;
+    private JLabel lblKpiPromocion;
     private JLabel lblKpiCriticos;
     private List<Articulo> articulosMemoria = new ArrayList<>();
 
@@ -340,13 +340,13 @@ public class MainFrame extends JFrame {
         // 1. Tarjetas KPI
         JPanel panelKpi = new JPanel(new GridLayout(1, 4, 12, 0));
         lblKpiTotalBultos = new JLabel("0", SwingConstants.CENTER);
-        lblKpiBultosFrescos = new JLabel("0", SwingConstants.CENTER);
-        lblKpiBultosCongelados = new JLabel("0", SwingConstants.CENTER);
+        lblKpiEstandar = new JLabel("0", SwingConstants.CENTER);
+        lblKpiPromocion = new JLabel("0", SwingConstants.CENTER);
         lblKpiCriticos = new JLabel("0", SwingConstants.CENTER);
 
         panelKpi.add(crearKpiCard("TOTAL BULTOS EN DEPÓSITO", lblKpiTotalBultos, new Color(24, 43, 73)));
-        panelKpi.add(crearKpiCard("BULTOS REFRIGERADOS FRESCOS", lblKpiBultosFrescos, new Color(13, 110, 253)));
-        panelKpi.add(crearKpiCard("BULTOS CONGELADOS IQF (-18°C)", lblKpiBultosCongelados, new Color(111, 66, 193)));
+        panelKpi.add(crearKpiCard("ARTÍCULOS ESTÁNDAR", lblKpiEstandar, new Color(13, 110, 253)));
+        panelKpi.add(crearKpiCard("ARTÍCULOS EN PROMOCIÓN", lblKpiPromocion, new Color(111, 66, 193)));
         panelKpi.add(crearKpiCard("ALERTAS CRÍTICAS (STOCK <= MÍNIMO)", lblKpiCriticos, new Color(220, 53, 69)));
         panel.add(panelKpi, BorderLayout.NORTH);
 
@@ -389,7 +389,7 @@ public class MainFrame extends JFrame {
         panelCentro.add(toolbar, BorderLayout.NORTH);
 
         // 3. Tabla de Artículos
-        String[] cols = {"Código", "Descripción", "Categoría Térmica", "Embalaje", "Precio Base", "Stock Físico", "Alerta Mínima", "Caducidad"};
+        String[] cols = {"Código", "Descripción", "Tipo Comercial", "Embalaje", "Costo Reposición", "Precio Venta", "Stock Depósito", "Alerta Mínima"};
         modelInventario = new DefaultTableModel(cols, 0) {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
@@ -409,8 +409,8 @@ public class MainFrame extends JFrame {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
                 if (!isSelected) {
                     try {
-                        String stockStr = table.getValueAt(row, 5).toString().replaceAll("[^0-9]", "");
-                        String alertaStr = table.getValueAt(row, 6).toString().replaceAll("[^0-9]", "");
+                        String stockStr = table.getValueAt(row, 6).toString().replaceAll("[^0-9]", "");
+                        String alertaStr = table.getValueAt(row, 7).toString().replaceAll("[^0-9]", "");
                         int stock = Integer.parseInt(stockStr);
                         int alerta = Integer.parseInt(alertaStr);
                         if (stock <= alerta) {
@@ -456,32 +456,36 @@ public class MainFrame extends JFrame {
     private void poblarTablaInventario(List<Articulo> lista) {
         modelInventario.setRowCount(0);
         int totalBultos = 0;
-        int frescos = 0;
-        int congelados = 0;
+        int estandar = 0;
+        int promocion = 0;
         int criticos = 0;
 
         for (Articulo a : lista) {
             totalBultos += a.getStockDeposito();
-            if (a.getCategoriaConservacion().contains("FRESCO")) {
-                frescos += a.getStockDeposito();
+            if (a.getTipoArticulo().contains("PROMOCIÓN")) {
+                promocion++;
             } else {
-                congelados += a.getStockDeposito();
+                estandar++;
             }
             if (a.getStockDeposito() <= a.getStockMinimoAlerta()) {
                 criticos++;
             }
 
             modelInventario.addRow(new Object[]{
-                    a.getCodigo(), a.getDescripcion(), a.getCategoriaConservacion(),
-                    a.getUnidadEmbalaje(), "$" + a.getPrecioVentaBase().setScale(2, RoundingMode.HALF_UP),
-                    a.getStockDeposito() + " bultos", a.getStockMinimoAlerta() + " bultos",
-                    a.getDiasCaducidadRecomendada() + " días"
+                    a.getCodigo(),
+                    a.getDescripcion(),
+                    a.getTipoArticulo(),
+                    a.getUnidadEmbalaje(),
+                    "$" + a.getPrecioCostoReposicion().setScale(2, RoundingMode.HALF_UP),
+                    "$" + a.getPrecioVentaBase().setScale(2, RoundingMode.HALF_UP),
+                    a.getStockDeposito() + " bultos",
+                    a.getStockMinimoAlerta() + " bultos"
             });
         }
 
         lblKpiTotalBultos.setText(String.valueOf(totalBultos));
-        lblKpiBultosFrescos.setText(String.valueOf(frescos));
-        lblKpiBultosCongelados.setText(String.valueOf(congelados));
+        lblKpiEstandar.setText(String.valueOf(estandar));
+        lblKpiPromocion.setText(String.valueOf(promocion));
         lblKpiCriticos.setText(String.valueOf(criticos));
     }
 

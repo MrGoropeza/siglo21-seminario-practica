@@ -7,9 +7,10 @@ import java.math.BigDecimal;
 import java.util.Objects;
 
 /**
- * Clase base abstracta del dominio avícola que modela un bulto cerrado estandarizado.
+ * Entidad base abstracta que modela un bulto avícola mayorista cerrado estándar.
+ * Se alinea 100% con el Modelo Entidad-Relación (DER) y la tabla relacional 'articulos'.
  * Aplica principios fundamentales de Programación Orientada a Objetos:
- * Encapsulamiento con invariantes de dominio, abstracción y polimorfismo de conservación y pricing.
+ * Encapsulamiento con invariantes de dominio y polimorfismo comercial.
  */
 public abstract class Articulo {
 
@@ -23,9 +24,6 @@ public abstract class Articulo {
     private int stockMinimoAlerta;
     private boolean activo;
 
-    /**
-     * Constructor por defecto con inicialización segura de tipos numéricos.
-     */
     public Articulo() {
         this.precioCostoReposicion = BigDecimal.ZERO;
         this.precioVentaBase = BigDecimal.ZERO;
@@ -34,9 +32,6 @@ public abstract class Articulo {
         this.activo = true;
     }
 
-    /**
-     * Constructor completo parametrizado con validación estricta de invariantes de negocio.
-     */
     public Articulo(int idArticulo, String codigo, String descripcion, String unidadEmbalaje,
                     BigDecimal precioCostoReposicion, BigDecimal precioVentaBase,
                     int stockDeposito, int stockMinimoAlerta, boolean activo) {
@@ -79,20 +74,10 @@ public abstract class Articulo {
     // Métodos concretos de comportamiento de dominio
     // =========================================================================
 
-    /**
-     * Verifica si existe disponibilidad física en depósito para cubrir la cantidad requerida.
-     * @param cantidad bultos solicitados (> 0)
-     * @return true si la existencia física cubre o supera la demanda.
-     */
     public boolean tieneStock(int cantidad) {
         return cantidad > 0 && this.stockDeposito >= cantidad;
     }
 
-    /**
-     * Descuenta del stock físico la cantidad solicitada salvaguardando la invariante de no negatividad.
-     * @param cantidad bultos a descontar
-     * @throws StockInsuficienteException si el stock actual es menor a la cantidad solicitada.
-     */
     public void descontarStock(int cantidad) throws StockInsuficienteException {
         if (cantidad <= 0) {
             throw new ValidacionException("La cantidad de bultos a descontar debe ser mayor a cero: " + cantidad);
@@ -103,10 +88,6 @@ public abstract class Articulo {
         this.stockDeposito -= cantidad;
     }
 
-    /**
-     * Incrementa la existencia física en depósito por reposición o compra.
-     * @param cantidad bultos a ingresar (> 0)
-     */
     public void reponerStock(int cantidad) {
         if (cantidad <= 0) {
             throw new ValidacionException("La cantidad a reponer debe ser mayor a cero: " + cantidad);
@@ -119,41 +100,27 @@ public abstract class Articulo {
     // =========================================================================
 
     /**
-     * Calcula polimórficamente el precio unitario final de venta considerando las
-     * políticas comerciales particulares de la categoría del producto avícola (fresco vs congelado).
-     * @param cantidadBultos volumen de compra en bultos
-     * @return precio unitario final con descuentos o recargos aplicados
+     * Calcula polimórficamente el precio unitario final de venta considerando la
+     * categoría comercial del artículo (estándar vs promocional por volumen).
+     * @param cantidadBultos volumen solicitado en bultos cerrados
+     * @return precio unitario final con descuentos comerciales aplicados
      */
     public abstract BigDecimal calcularPrecioVentaFinal(int cantidadBultos);
 
     /**
-     * Especificación técnica del protocolo de cadena de frío y rango de temperatura.
-     * @return categoría de conservación estandarizada
+     * Denominación de la modalidad comercial del artículo en el catálogo mayorista.
+     * @return tipo comercial del artículo ("ESTÁNDAR" o "PROMOCIÓN VOLUMEN")
      */
-    public abstract String getCategoriaConservacion();
-
-    /**
-     * Período de vida útil comercial máxima en condiciones ideales de almacenamiento.
-     * @return cantidad de días recomendados antes de caducidad
-     */
-    public abstract int getDiasCaducidadRecomendada();
+    public abstract String getTipoArticulo();
 
     // =========================================================================
     // Getters y Setters con validación de invariantes
     // =========================================================================
 
-    public int getIdArticulo() {
-        return idArticulo;
-    }
+    public int getIdArticulo() { return idArticulo; }
+    public void setIdArticulo(int idArticulo) { this.idArticulo = idArticulo; }
 
-    public void setIdArticulo(int idArticulo) {
-        this.idArticulo = idArticulo;
-    }
-
-    public String getCodigo() {
-        return codigo;
-    }
-
+    public String getCodigo() { return codigo; }
     public void setCodigo(String codigo) {
         if (codigo == null || codigo.trim().isEmpty()) {
             throw new ValidacionException("El código del artículo no puede ser nulo ni vacío.");
@@ -161,10 +128,7 @@ public abstract class Articulo {
         this.codigo = codigo.trim();
     }
 
-    public String getDescripcion() {
-        return descripcion;
-    }
-
+    public String getDescripcion() { return descripcion; }
     public void setDescripcion(String descripcion) {
         if (descripcion == null || descripcion.trim().isEmpty()) {
             throw new ValidacionException("La descripción del artículo no puede ser nula ni vacía.");
@@ -172,18 +136,12 @@ public abstract class Articulo {
         this.descripcion = descripcion.trim();
     }
 
-    public String getUnidadEmbalaje() {
-        return unidadEmbalaje;
-    }
-
+    public String getUnidadEmbalaje() { return unidadEmbalaje; }
     public void setUnidadEmbalaje(String unidadEmbalaje) {
         this.unidadEmbalaje = unidadEmbalaje != null ? unidadEmbalaje.trim() : "";
     }
 
-    public BigDecimal getPrecioCostoReposicion() {
-        return precioCostoReposicion;
-    }
-
+    public BigDecimal getPrecioCostoReposicion() { return precioCostoReposicion; }
     public void setPrecioCostoReposicion(BigDecimal precioCostoReposicion) {
         if (precioCostoReposicion == null || precioCostoReposicion.compareTo(BigDecimal.ZERO) < 0) {
             throw new ValidacionException("El precio de costo de reposición no puede ser negativo.");
@@ -191,10 +149,7 @@ public abstract class Articulo {
         this.precioCostoReposicion = precioCostoReposicion;
     }
 
-    public BigDecimal getPrecioVentaBase() {
-        return precioVentaBase;
-    }
-
+    public BigDecimal getPrecioVentaBase() { return precioVentaBase; }
     public void setPrecioVentaBase(BigDecimal precioVentaBase) {
         if (precioVentaBase == null || precioVentaBase.compareTo(BigDecimal.ZERO) < 0) {
             throw new ValidacionException("El precio de venta base no puede ser negativo.");
@@ -202,10 +157,7 @@ public abstract class Articulo {
         this.precioVentaBase = precioVentaBase;
     }
 
-    public int getStockDeposito() {
-        return stockDeposito;
-    }
-
+    public int getStockDeposito() { return stockDeposito; }
     public void setStockDeposito(int stockDeposito) {
         if (stockDeposito < 0) {
             throw new ValidacionException("El stock en depósito no puede ser negativo: " + stockDeposito);
@@ -213,10 +165,7 @@ public abstract class Articulo {
         this.stockDeposito = stockDeposito;
     }
 
-    public int getStockMinimoAlerta() {
-        return stockMinimoAlerta;
-    }
-
+    public int getStockMinimoAlerta() { return stockMinimoAlerta; }
     public void setStockMinimoAlerta(int stockMinimoAlerta) {
         if (stockMinimoAlerta < 0) {
             throw new ValidacionException("El stock mínimo de alerta no puede ser negativo: " + stockMinimoAlerta);
@@ -224,13 +173,8 @@ public abstract class Articulo {
         this.stockMinimoAlerta = stockMinimoAlerta;
     }
 
-    public boolean isActivo() {
-        return activo;
-    }
-
-    public void setActivo(boolean activo) {
-        this.activo = activo;
-    }
+    public boolean isActivo() { return activo; }
+    public void setActivo(boolean activo) { this.activo = activo; }
 
     @Override
     public boolean equals(Object o) {
@@ -248,6 +192,6 @@ public abstract class Articulo {
     @Override
     public String toString() {
         return codigo + " - " + descripcion + " (" + unidadEmbalaje + ") - $" + precioVentaBase +
-                " [Stock: " + stockDeposito + " | " + getCategoriaConservacion() + "]";
+                " [Stock: " + stockDeposito + " | " + getTipoArticulo() + "]";
     }
 }

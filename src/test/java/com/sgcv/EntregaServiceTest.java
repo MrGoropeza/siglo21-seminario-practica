@@ -7,8 +7,8 @@ import com.sgcv.exception.LimiteCreditoExcedidoException;
 import com.sgcv.exception.StockInsuficienteException;
 import com.sgcv.exception.ValidacionException;
 import com.sgcv.model.Articulo;
-import com.sgcv.model.ArticuloCongelado;
-import com.sgcv.model.ArticuloFresco;
+import com.sgcv.model.ArticuloEstandar;
+import com.sgcv.model.ArticuloPromocional;
 import com.sgcv.model.Cliente;
 import com.sgcv.model.DetalleEntrega;
 import com.sgcv.model.Entrega;
@@ -74,10 +74,10 @@ public class EntregaServiceTest {
                     new BigDecimal("50000.00"), new BigDecimal("300000.00"), true);
             clienteDAO.guardar(cliente);
 
-            ArticuloFresco artFresco = new ArticuloFresco(10, "POLL-ENT-20", "Pollo Entero Fresco",
+            ArticuloEstandar art = new ArticuloEstandar(10, "POLL-ENT-20", "Pollo Entero",
                     "Caja x 20kg", new BigDecimal("40000.00"), new BigDecimal("50000.00"),
                     8, 5, true); // Solo 8 en stock
-            articuloDAO.guardar(artFresco);
+            articuloDAO.guardar(art);
 
             Entrega entrega = new Entrega();
             entrega.setIdCliente(1);
@@ -108,10 +108,10 @@ public class EntregaServiceTest {
                     new BigDecimal("280000.00"), new BigDecimal("300000.00"), true);
             clienteDAO.guardar(cliente);
 
-            ArticuloCongelado artCongelado = new ArticuloCongelado(20, "PECH-SUP-15", "Suprema Pechuga",
+            ArticuloEstandar artEstandar = new ArticuloEstandar(20, "PECH-SUP-15", "Suprema Pechuga",
                     "Caja x 15kg", new BigDecimal("50000.00"), new BigDecimal("70000.00"),
                     50, 10, true);
-            articuloDAO.guardar(artCongelado);
+            articuloDAO.guardar(artEstandar);
 
             // 1 bulto = 70.000 + recargo frío 3% (72.100) -> saldo proyectado = 352.100 > 300.000
             Entrega entrega = new Entrega();
@@ -138,10 +138,10 @@ public class EntregaServiceTest {
                     new BigDecimal("190000.00"), new BigDecimal("200000.00"), true);
             clienteDAO.guardar(cliente);
 
-            ArticuloFresco fresco = new ArticuloFresco(30, "POLL-ENT", "Pollo Entero",
+            ArticuloEstandar art = new ArticuloEstandar(30, "POLL-ENT", "Pollo Entero",
                     "Caja x 20kg", new BigDecimal("30000.00"), new BigDecimal("40000.00"),
                     30, 5, true);
-            articuloDAO.guardar(fresco);
+            articuloDAO.guardar(art);
 
             Entrega entrega = new Entrega();
             entrega.setIdCliente(3);
@@ -170,10 +170,10 @@ public class EntregaServiceTest {
                     new BigDecimal("10000.00"), new BigDecimal("500000.00"), true);
             clienteDAO.guardar(cliente);
 
-            ArticuloFresco fresco = new ArticuloFresco(40, "POLL-ENT-20", "Pollo Entero",
+            ArticuloPromocional promo = new ArticuloPromocional(40, "POLL-ENT-20", "Pollo Entero",
                     "Caja x 20kg", new BigDecimal("40000.00"), new BigDecimal("50000.00"),
                     100, 10, true);
-            articuloDAO.guardar(fresco);
+            articuloDAO.guardar(promo);
 
             Entrega entrega = new Entrega();
             entrega.setIdCliente(4);
@@ -186,7 +186,7 @@ public class EntregaServiceTest {
             assertTrue(exito);
             assertEquals(new BigDecimal("47500.00"), entrega.getDetalles().get(0).getPrecioUnitarioCongelado());
             assertEquals(new BigDecimal("475000.00"), entrega.getTotalEntrega());
-            assertEquals(90, fresco.getStockDeposito(), "El stock debió decrementar 10 bultos");
+            assertEquals(90, promo.getStockDeposito(), "El stock debió decrementar 10 bultos");
         }
 
         @Test

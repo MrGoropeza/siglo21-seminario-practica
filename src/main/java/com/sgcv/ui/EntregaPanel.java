@@ -231,7 +231,7 @@ public class EntregaPanel extends JPanel {
         panelPaso2.add(filaAgregar, BorderLayout.NORTH);
 
         // Tabla de Renglones cargados
-        String[] columnas = {"#", "Código", "Descripción", "Conservación", "Bultos", "Precio Unit.", "Subtotal"};
+        String[] columnas = {"#", "Código", "Descripción", "Tipo", "Bultos", "Precio Unit.", "Subtotal"};
         tableModel = new DefaultTableModel(columnas, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -433,7 +433,7 @@ public class EntregaPanel extends JPanel {
             return;
         }
 
-        // Cálculo polimórfico del precio final (5% dto en Frescos >= 10, o 4% dto en Congelados >= 20 / recargo 3% < 5)
+        // Cálculo polimórfico del precio final (5% dto en ArticuloPromocional >= 10 bultos)
         BigDecimal precioPolimorfico = art.calcularPrecioVentaFinal(cant);
         DetalleEntrega det = new DetalleEntrega(
                 art.getIdArticulo(), art.getCodigo(), art.getDescripcion(),
@@ -444,7 +444,7 @@ public class EntregaPanel extends JPanel {
         int numeroRenglon = tableModel.getRowCount() + 1;
         tableModel.addRow(new Object[]{
                 numeroRenglon, art.getCodigo(), art.getDescripcion(),
-                art.getCategoriaConservacion(), cant,
+                art.getTipoArticulo(), cant,
                 "$" + precioPolimorfico, "$" + det.getSubtotal()
         });
 
@@ -505,13 +505,10 @@ public class EntregaPanel extends JPanel {
         lblSubtotalBase.setText("Subtotal Tarifa Lista: $" + subtotalLista.setScale(2, RoundingMode.HALF_UP));
 
         if (bonificacionTotal.compareTo(BigDecimal.ZERO) > 0) {
-            lblDescuentoBonif.setText("Descuento por Volumen: -$" + bonificacionTotal.setScale(2, RoundingMode.HALF_UP) + " (Ahorro Cliente)");
+            lblDescuentoBonif.setText("Descuento Promocional por Volumen: -$" + bonificacionTotal.setScale(2, RoundingMode.HALF_UP) + " (Ahorro Cliente)");
             lblDescuentoBonif.setForeground(new Color(30, 130, 60));
-        } else if (bonificacionTotal.compareTo(BigDecimal.ZERO) < 0) {
-            lblDescuentoBonif.setText("Recargo Logística Cadena de Frío: +$" + bonificacionTotal.abs().setScale(2, RoundingMode.HALF_UP));
-            lblDescuentoBonif.setForeground(new Color(180, 80, 20));
         } else {
-            lblDescuentoBonif.setText("Descuento por Volumen: $0.00");
+            lblDescuentoBonif.setText("Bonificación por Volumen: $0.00");
             lblDescuentoBonif.setForeground(new Color(80, 90, 105));
         }
 
