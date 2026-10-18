@@ -2,12 +2,15 @@ package com.sgcv.service;
 
 import com.sgcv.dao.ArticuloDAO;
 import com.sgcv.dao.IArticuloDAO;
+import com.sgcv.exception.ValidacionException;
 import com.sgcv.model.Articulo;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+
 
 /**
  * Servicio de negocio para la administración de artículos e inventario avícola.
@@ -159,7 +162,70 @@ public class ArticuloService implements IArticuloService {
         return -1; // No encontrado
     }
 
+    @Override
+    public int crearArticulo(Articulo articulo) throws SQLException {
+        if (articulo == null) {
+            throw new ValidacionException("El artículo no puede ser nulo.");
+        }
+        if (articulo.getCodigo() == null || articulo.getCodigo().trim().isEmpty()) {
+            throw new ValidacionException("El código del producto es obligatorio.");
+        }
+        if (articulo.getDescripcion() == null || articulo.getDescripcion().trim().isEmpty()) {
+            throw new ValidacionException("La descripción del producto es obligatoria.");
+        }
+        if (articulo.getPrecioVentaBase() == null || articulo.getPrecioVentaBase().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El precio de venta base no puede ser negativo.");
+        }
+        if (articulo.getPrecioCostoReposicion() == null || articulo.getPrecioCostoReposicion().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El costo de reposición no puede ser negativo.");
+        }
+        if (articuloDAO.existeCodigo(articulo.getCodigo(), 0)) {
+            throw new ValidacionException("Ya existe un producto con el código '" + articulo.getCodigo().toUpperCase().trim() + "'.");
+        }
+        return articuloDAO.crearArticulo(articulo);
+    }
+
+    @Override
+    public boolean actualizarArticulo(Articulo articulo) throws SQLException {
+        if (articulo == null) {
+            throw new ValidacionException("El artículo no puede ser nulo.");
+        }
+        if (articulo.getIdArticulo() <= 0) {
+            throw new ValidacionException("Debe especificar un ID de artículo válido para actualizar.");
+        }
+        if (articulo.getCodigo() == null || articulo.getCodigo().trim().isEmpty()) {
+            throw new ValidacionException("El código del producto es obligatorio.");
+        }
+        if (articulo.getDescripcion() == null || articulo.getDescripcion().trim().isEmpty()) {
+            throw new ValidacionException("La descripción del producto es obligatoria.");
+        }
+        if (articulo.getPrecioVentaBase() == null || articulo.getPrecioVentaBase().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El precio de venta base no puede ser negativo.");
+        }
+        if (articulo.getPrecioCostoReposicion() == null || articulo.getPrecioCostoReposicion().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El costo de reposición no puede ser negativo.");
+        }
+        if (articuloDAO.existeCodigo(articulo.getCodigo(), articulo.getIdArticulo())) {
+            throw new ValidacionException("Ya existe otro producto con el código '" + articulo.getCodigo().toUpperCase().trim() + "'.");
+        }
+        return articuloDAO.actualizarArticulo(articulo);
+    }
+
+    @Override
+    public boolean eliminarArticulo(int idArticulo) throws SQLException {
+        if (idArticulo <= 0) {
+            throw new ValidacionException("ID de artículo inválido: " + idArticulo);
+        }
+        return articuloDAO.eliminarArticulo(idArticulo);
+    }
+
+    @Override
+    public boolean existeCodigo(String codigo, int idArticuloExcluir) throws SQLException {
+        return articuloDAO.existeCodigo(codigo, idArticuloExcluir);
+    }
+
     public IArticuloDAO getArticuloDAO() {
         return articuloDAO;
     }
 }
+

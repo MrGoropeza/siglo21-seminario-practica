@@ -39,4 +39,25 @@ public interface IArticuloService {
      * @return índice del artículo en la lista, o -1 si no se encuentra
      */
     int busquedaBinariaPorCodigo(List<Articulo> listaOrdenadaPorCodigo, String codigoBuscado);
+
+    /**
+     * Registra un nuevo producto en el catálogo.
+     */
+    int crearArticulo(Articulo articulo) throws SQLException;
+
+    /**
+     * Actualiza los datos y precios de un producto en el catálogo.
+     */
+    boolean actualizarArticulo(Articulo articulo) throws SQLException;
+
+    /**
+     * Desactiva un producto del catálogo para evitar su venta.
+     */
+    boolean eliminarArticulo(int idArticulo) throws SQLException;
+
+    /**
+     * Valida si un código ya se encuentra en uso.
+     */
+    boolean existeCodigo(String codigo, int idArticuloExcluir) throws SQLException;
 }
+

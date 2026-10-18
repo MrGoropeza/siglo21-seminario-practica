@@ -68,9 +68,11 @@ public class EntregaPanel extends JPanel {
     private JLabel lblCreditoDisponible;
     private JLabel lblBadgeEstado;
 
-    // Matriz de los 6 Artículos (Controles por artículo)
+    // Matriz Dinámica de N Artículos (Buscador y Controles)
     private final Map<Integer, ArticuloControl> articulosControles = new HashMap<>();
     private JPanel panelMatrizBultos;
+    private JTextField txtBuscarBulto;
+    private JCheckBox chkSoloSeleccionados;
 
     // Cobranza en la Parada
     private JTextField txtCobroEfectivo;
@@ -234,38 +236,103 @@ public class EntregaPanel extends JPanel {
     }
 
     // =========================================================================
-    // 2. Matriz Directa de los 6 Bultos Estándar
+    // 2. Matriz Dinámica de Bultos (N Artículos con Buscador en Ruta)
     // =========================================================================
 
     private JPanel crearPanelMatrizArticulos() {
         JPanel panel = new JPanel(new BorderLayout(0, 6));
         panel.setOpaque(false);
 
-        JLabel lblTit = new JLabel("📦 Carga Directa de Bultos en Camioneta (Catálogo Estándar SGCV)");
+        JPanel pHeaderBultos = new JPanel(new BorderLayout(10, 0));
+        pHeaderBultos.setOpaque(false);
+
+        JLabel lblTit = new JLabel("📦 Carga Directa de Bultos en Camioneta");
         lblTit.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
         lblTit.setForeground(new Color(20, 35, 60));
-        panel.add(lblTit, BorderLayout.NORTH);
+        pHeaderBultos.add(lblTit, BorderLayout.WEST);
 
-        panelMatrizBultos = new JPanel(new GridLayout(2, 3, 10, 10));
+        // Barra de búsqueda y filtro rápido en ruta
+        JPanel pFiltros = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        pFiltros.setOpaque(false);
+
+        pFiltros.add(new JLabel("🔍 Buscar bulto:"));
+        txtBuscarBulto = new JTextField(14);
+        txtBuscarBulto.setToolTipText("Filtrar por código o nombre del producto");
+        txtBuscarBulto.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { filtrarTarjetasBultos(); }
+            @Override public void removeUpdate(DocumentEvent e) { filtrarTarjetasBultos(); }
+            @Override public void changedUpdate(DocumentEvent e) { filtrarTarjetasBultos(); }
+        });
+        pFiltros.add(txtBuscarBulto);
+
+        chkSoloSeleccionados = new JCheckBox("Solo cargados (>0)");
+        chkSoloSeleccionados.setOpaque(false);
+        chkSoloSeleccionados.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        chkSoloSeleccionados.addActionListener(e -> filtrarTarjetasBultos());
+        pFiltros.add(chkSoloSeleccionados);
+
+        JButton btnLimpiarFiltro = new JButton("Ver Todos");
+        btnLimpiarFiltro.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
+        btnLimpiarFiltro.setMargin(new Insets(2, 6, 2, 6));
+        btnLimpiarFiltro.addActionListener(e -> {
+            txtBuscarBulto.setText("");
+            chkSoloSeleccionados.setSelected(false);
+            filtrarTarjetasBultos();
+        });
+        pFiltros.add(btnLimpiarFiltro);
+
+        pHeaderBultos.add(pFiltros, BorderLayout.EAST);
+        panel.add(pHeaderBultos, BorderLayout.NORTH);
+
+        panelMatrizBultos = new JPanel(new GridLayout(0, 3, 10, 10));
         panelMatrizBultos.setOpaque(false);
 
-        JScrollPane scroll = new JScrollPane(panelMatrizBultos);
+        JPanel panelWrapper = new JPanel(new BorderLayout());
+        panelWrapper.setOpaque(false);
+        panelWrapper.add(panelMatrizBultos, BorderLayout.NORTH);
+
+        JScrollPane scroll = new JScrollPane(panelWrapper);
         scroll.setBorder(null);
         scroll.setOpaque(false);
         scroll.getViewport().setOpaque(false);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
         panel.add(scroll, BorderLayout.CENTER);
 
         return panel;
     }
 
     private void construirTarjetasArticulos() {
+        Map<Integer, Integer> cantidadesPrevias = new HashMap<>();
+        for (Map.Entry<Integer, ArticuloControl> entry : articulosControles.entrySet()) {
+            cantidadesPrevias.put(entry.getKey(), entry.getValue().cantidad);
+        }
+
         panelMatrizBultos.removeAll();
         articulosControles.clear();
 
         for (Articulo art : listaArticulos) {
             ArticuloControl ctrl = new ArticuloControl(art);
+            if (cantidadesPrevias.containsKey(art.getIdArticulo())) {
+                ctrl.setCantidad(cantidadesPrevias.get(art.getIdArticulo()));
+            }
             articulosControles.put(art.getIdArticulo(), ctrl);
             panelMatrizBultos.add(ctrl.panel);
+        }
+
+        filtrarTarjetasBultos();
+    }
+
+    private void filtrarTarjetasBultos() {
+        String filtro = txtBuscarBulto != null ? txtBuscarBulto.getText().trim().toLowerCase() : "";
+        boolean soloSeleccionados = chkSoloSeleccionados != null && chkSoloSeleccionados.isSelected();
+
+        for (ArticuloControl ctrl : articulosControles.values()) {
+            boolean coincideTexto = filtro.isEmpty() ||
+                    ctrl.articulo.getCodigo().toLowerCase().contains(filtro) ||
+                    ctrl.articulo.getDescripcion().toLowerCase().contains(filtro);
+            boolean coincideSeleccion = !soloSeleccionados || ctrl.cantidad > 0;
+
+            ctrl.panel.setVisible(coincideTexto && coincideSeleccion);
         }
 
         panelMatrizBultos.revalidate();
@@ -783,6 +850,9 @@ public class EntregaPanel extends JPanel {
         for (ArticuloControl ctrl : articulosControles.values()) {
             ctrl.setCantidad(0);
         }
+        if (txtBuscarBulto != null) txtBuscarBulto.setText("");
+        if (chkSoloSeleccionados != null) chkSoloSeleccionados.setSelected(false);
+        filtrarTarjetasBultos();
         txtCobroEfectivo.setText("0.00");
         txtCobroTransferencia.setText("0.00");
         txtRefTransferencia.setText("");
@@ -792,7 +862,13 @@ public class EntregaPanel extends JPanel {
     private BigDecimal parseMonto(String texto) {
         if (texto == null || texto.trim().isEmpty()) return BigDecimal.ZERO;
         try {
-            String limpio = texto.trim().replace("$", "").replace(".", "").replace(",", ".");
+            String limpio = texto.trim().replace("$", "").replace(" ", "");
+            if (limpio.isEmpty()) return BigDecimal.ZERO;
+            if (limpio.contains(",") && limpio.contains(".")) {
+                limpio = limpio.replace(".", "").replace(",", ".");
+            } else if (limpio.contains(",")) {
+                limpio = limpio.replace(",", ".");
+            }
             BigDecimal bd = new BigDecimal(limpio);
             return bd.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : bd;
         } catch (NumberFormatException e) {

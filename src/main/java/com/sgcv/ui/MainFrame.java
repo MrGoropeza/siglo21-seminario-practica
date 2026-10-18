@@ -1,6 +1,8 @@
 package com.sgcv.ui;
 
 import com.sgcv.model.Articulo;
+import com.sgcv.model.ArticuloEstandar;
+import com.sgcv.model.ArticuloPromocional;
 import com.sgcv.service.ArticuloService;
 import com.sgcv.service.ArqueoService;
 import com.sgcv.service.ClienteService;
@@ -23,7 +25,9 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
+import java.math.BigDecimal;
 import java.math.RoundingMode;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -218,6 +222,26 @@ public class MainFrame extends JFrame {
         });
         toolbar.add(txtBuscarArticulo);
 
+        JButton btnNuevo = new JButton("➕ Nuevo Producto");
+        btnNuevo.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnNuevo.setBackground(new Color(25, 125, 55));
+        btnNuevo.setForeground(Color.WHITE);
+        btnNuevo.setToolTipText("Crear un nuevo producto en el catálogo general");
+        btnNuevo.addActionListener(e -> abrirModalArticulo(null));
+        toolbar.add(btnNuevo);
+
+        JButton btnModificar = new JButton("✏️ Modificar");
+        btnModificar.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+        btnModificar.setToolTipText("Editar descripción, embalaje, costo o precio del producto seleccionado");
+        btnModificar.addActionListener(e -> modificarArticuloSeleccionado());
+        toolbar.add(btnModificar);
+
+        JButton btnDesactivar = new JButton("🗑️ Desactivar");
+        btnDesactivar.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 12));
+        btnDesactivar.setToolTipText("Desactivar producto para evitar su venta en ruta");
+        btnDesactivar.addActionListener(e -> desactivarArticuloSeleccionado());
+        toolbar.add(btnDesactivar);
+
         JButton btnOrdenarMergeSort = new JButton("🔄 Ordenar por Stock");
         btnOrdenarMergeSort.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
         btnOrdenarMergeSort.setToolTipText("Ordenar productos de menor a mayor stock físico");
@@ -230,7 +254,7 @@ public class MainFrame extends JFrame {
         btnBusquedaBinaria.addActionListener(e -> ejecutarBusquedaPorCodigo());
         toolbar.add(btnBusquedaBinaria);
 
-        JButton btnRefrescar = new JButton("🔄 Recargar Catálogo");
+        JButton btnRefrescar = new JButton("🔄 Recargar");
         btnRefrescar.addActionListener(e -> refrescarTablaInventario());
         toolbar.add(btnRefrescar);
 
@@ -247,8 +271,18 @@ public class MainFrame extends JFrame {
         tableInventario.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
         tableInventario.getTableHeader().setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
 
+        tableInventario.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    modificarArticuloSeleccionado();
+                }
+            }
+        });
+
         sorterInventario = new TableRowSorter<>(modelInventario);
         tableInventario.setRowSorter(sorterInventario);
+
 
         // Renderizador con resaltado para alertas de stock mínimo crítico
         tableInventario.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
@@ -405,6 +439,159 @@ public class MainFrame extends JFrame {
         }
     }
 
+    private void modificarArticuloSeleccionado() {
+        int selectedRow = tableInventario.getSelectedRow();
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione un producto de la tabla para modificar.",
+                    "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tableInventario.convertRowIndexToModel(selectedRow);
+        String codigo = (String) modelInventario.getValueAt(modelRow, 0);
+        Articulo encontrado = articulosMemoria.stream()
+                .filter(a -> a.getCodigo().equalsIgnoreCase(codigo))
+                .findFirst().orElse(null);
+
+        if (encontrado != null) {
+            abrirModalArticulo(encontrado);
+        }
+    }
+
+    private void desactivarArticuloSeleccionado() {
+        int selectedRow = tableInventario.getSelectedRow();
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione un producto de la tabla para desactivar.",
+                    "Selección Requerida", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        int modelRow = tableInventario.convertRowIndexToModel(selectedRow);
+        String codigo = (String) modelInventario.getValueAt(modelRow, 0);
+        Articulo encontrado = articulosMemoria.stream()
+                .filter(a -> a.getCodigo().equalsIgnoreCase(codigo))
+                .findFirst().orElse(null);
+
+        if (encontrado != null) {
+            int resp = JOptionPane.showConfirmDialog(this,
+                    String.format("¿Desea desactivar el producto '%s - %s' del catálogo de ventas?\n\n" +
+                                    "No aparecerá en la toma de pedidos en ruta, pero los remitos y cierres históricos conservarán su snapshot intacto.",
+                            encontrado.getCodigo(), encontrado.getDescripcion()),
+                    "Desactivar Producto", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (resp == JOptionPane.YES_OPTION) {
+                try {
+                    articuloService.eliminarArticulo(encontrado.getIdArticulo());
+                    JOptionPane.showMessageDialog(this, "Producto desactivado correctamente.", "Catálogo Actualizado", JOptionPane.INFORMATION_MESSAGE);
+                    refrescarTodosLosDatos();
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Error al desactivar producto: " + ex.getMessage(), "Error SQL", JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        }
+    }
+
+    private void abrirModalArticulo(Articulo existente) {
+        boolean esEdicion = existente != null;
+        JDialog dialog = new JDialog(this, esEdicion ? "Modificar Producto (" + existente.getCodigo() + ")" : "Nuevo Bulto Avícola", true);
+        dialog.setLayout(new BorderLayout(10, 10));
+        dialog.setSize(520, 480);
+        dialog.setLocationRelativeTo(this);
+
+        JPanel pForm = new JPanel(new GridLayout(9, 2, 8, 8));
+        pForm.setBorder(new EmptyBorder(15, 20, 15, 20));
+
+        pForm.add(new JLabel("Código Único:"));
+        JTextField txtCodigo = new JTextField(esEdicion ? existente.getCodigo() : "");
+        txtCodigo.setToolTipText("Ejemplo: POLL-ENT-20, PATA-MUS-15, PECH-SUP-15");
+        if (esEdicion) txtCodigo.setEditable(false);
+        pForm.add(txtCodigo);
+
+        pForm.add(new JLabel("Descripción Comercial:"));
+        JTextField txtDesc = new JTextField(esEdicion ? existente.getDescripcion() : "");
+        pForm.add(txtDesc);
+
+        pForm.add(new JLabel("Tipo Comercial:"));
+        JComboBox<String> comboTipo = new JComboBox<>(new String[]{
+                "Estándar (sin bonificación)",
+                "Promocional (5% desc. >= 10 bultos)"
+        });
+        if (esEdicion && existente.getTipoArticulo().contains("PROMOCIÓN")) {
+            comboTipo.setSelectedIndex(1);
+        }
+        pForm.add(comboTipo);
+
+        pForm.add(new JLabel("Unidad de Embalaje:"));
+        JTextField txtEmbalaje = new JTextField(esEdicion ? existente.getUnidadEmbalaje() : "Caja x 20kg");
+        pForm.add(txtEmbalaje);
+
+        pForm.add(new JLabel("Costo de Reposición ($):"));
+        JTextField txtCosto = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioCostoReposicion()).replace(",", ".") : "0.00");
+        pForm.add(txtCosto);
+
+        pForm.add(new JLabel("Precio de Venta Base ($):"));
+        JTextField txtPrecio = new JTextField(esEdicion ? String.format("%.2f", existente.getPrecioVentaBase()).replace(",", ".") : "0.00");
+        pForm.add(txtPrecio);
+
+        pForm.add(new JLabel("Stock Depósito (bultos):"));
+        JTextField txtStock = new JTextField(esEdicion ? String.valueOf(existente.getStockDeposito()) : "50");
+        pForm.add(txtStock);
+
+        pForm.add(new JLabel("Stock Mínimo de Alerta:"));
+        JTextField txtStockMin = new JTextField(esEdicion ? String.valueOf(existente.getStockMinimoAlerta()) : "10");
+        pForm.add(txtStockMin);
+
+        pForm.add(new JLabel("Estado:"));
+        JCheckBox chkActivo = new JCheckBox("Activo para venta", esEdicion ? existente.isActivo() : true);
+        pForm.add(chkActivo);
+
+        dialog.add(pForm, BorderLayout.CENTER);
+
+        JPanel pBotones = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 10));
+        JButton btnCancelar = new JButton("Cancelar");
+        btnCancelar.addActionListener(e -> dialog.dispose());
+        pBotones.add(btnCancelar);
+
+        JButton btnGuardar = new JButton(esEdicion ? "✔ Guardar Cambios" : "➕ Crear Producto");
+        btnGuardar.setBackground(new Color(25, 120, 50));
+        btnGuardar.setForeground(Color.WHITE);
+        btnGuardar.addActionListener(e -> {
+            try {
+                String codigo = txtCodigo.getText().trim().toUpperCase();
+                String desc = txtDesc.getText().trim();
+                String emb = txtEmbalaje.getText().trim();
+                BigDecimal costo = parseMonto(txtCosto.getText());
+                BigDecimal precio = parseMonto(txtPrecio.getText());
+                int stock = Integer.parseInt(txtStock.getText().trim());
+                int stockMin = Integer.parseInt(txtStockMin.getText().trim());
+                boolean activo = chkActivo.isSelected();
+
+                boolean esPromo = comboTipo.getSelectedIndex() == 1;
+                Articulo nuevoArt = esPromo ?
+                        new ArticuloPromocional(esEdicion ? existente.getIdArticulo() : 0, codigo, desc, emb, costo, precio, stock, stockMin, activo) :
+                        new ArticuloEstandar(esEdicion ? existente.getIdArticulo() : 0, codigo, desc, emb, costo, precio, stock, stockMin, activo);
+
+                if (esEdicion) {
+                    articuloService.actualizarArticulo(nuevoArt);
+                    JOptionPane.showMessageDialog(dialog, "Producto actualizado correctamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+                } else {
+                    articuloService.crearArticulo(nuevoArt);
+                    JOptionPane.showMessageDialog(dialog, "Producto creado exitosamente con código " + codigo + ".", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+                }
+
+                dialog.dispose();
+                refrescarTodosLosDatos();
+
+            } catch (NumberFormatException nfe) {
+                JOptionPane.showMessageDialog(dialog, "Valores numéricos inválidos en costo, precio o stock.", "Error de Validación", JOptionPane.ERROR_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(dialog, "Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        pBotones.add(btnGuardar);
+        dialog.add(pBotones, BorderLayout.SOUTH);
+
+        dialog.setVisible(true);
+    }
+
+
     private JPanel crearKpiCard(String titulo, JLabel lblValor, Color colorValor) {
         JPanel card = new JPanel(new BorderLayout(4, 2));
         card.setBorder(new CompoundBorder(
@@ -476,6 +663,22 @@ public class MainFrame extends JFrame {
         ta.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         ta.setEditable(false);
         JOptionPane.showMessageDialog(this, new JScrollPane(ta), "Guía Operativa para el Repartidor", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private BigDecimal parseMonto(String texto) {
+        if (texto == null || texto.trim().isEmpty()) return BigDecimal.ZERO;
+        try {
+            String limpio = texto.trim().replace("$", "").replace(" ", "");
+            if (limpio.isEmpty()) return BigDecimal.ZERO;
+            if (limpio.contains(",") && limpio.contains(".")) {
+                limpio = limpio.replace(".", "").replace(",", ".");
+            } else if (limpio.contains(",")) {
+                limpio = limpio.replace(",", ".");
+            }
+            return new BigDecimal(limpio);
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     private void mostrarAcercaDe() {

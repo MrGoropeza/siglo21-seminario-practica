@@ -35,4 +35,38 @@ public interface IArticuloDAO {
      * @throws SQLException ante fallas de base de datos
      */
     boolean decrementarStock(int idArticulo, int cantidad, Connection conn) throws SQLException;
+
+    /**
+     * Inserta un nuevo artículo en la base de datos.
+     * @param articulo entidad a persistir
+     * @return ID autogenerado
+     * @throws SQLException ante errores SQL
+     */
+    int crearArticulo(Articulo articulo) throws SQLException;
+
+    /**
+     * Actualiza los datos maestros y precios de un artículo existente.
+     * @param articulo entidad con datos modificados
+     * @return true si se actualizó el registro
+     * @throws SQLException ante errores SQL
+     */
+    boolean actualizarArticulo(Articulo articulo) throws SQLException;
+
+    /**
+     * Desactiva lógicamente un artículo del catálogo para evitar su venta.
+     * @param idArticulo ID del artículo
+     * @return true si fue desactivado
+     * @throws SQLException ante errores SQL
+     */
+    boolean eliminarArticulo(int idArticulo) throws SQLException;
+
+    /**
+     * Valida si un código de producto ya se encuentra registrado.
+     * @param codigo código a validar
+     * @param idArticuloExcluir ID a ignorar (útil al editar)
+     * @return true si ya existe
+     * @throws SQLException ante errores SQL
+     */
+    boolean existeCodigo(String codigo, int idArticuloExcluir) throws SQLException;
 }
+

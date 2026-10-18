@@ -349,7 +349,34 @@ public class EntregaServiceTest {
             }
             return false;
         }
+
+        @Override
+        public int crearArticulo(Articulo articulo) {
+            int id = repo.size() + 1;
+            articulo.setIdArticulo(id);
+            repo.put(id, articulo);
+            return id;
+        }
+
+        @Override
+        public boolean actualizarArticulo(Articulo articulo) {
+            repo.put(articulo.getIdArticulo(), articulo);
+            return true;
+        }
+
+        @Override
+        public boolean eliminarArticulo(int idArticulo) {
+            repo.remove(idArticulo);
+            return true;
+        }
+
+        @Override
+        public boolean existeCodigo(String codigo, int idArticuloExcluir) {
+            return repo.values().stream()
+                    .anyMatch(a -> a.getIdArticulo() != idArticuloExcluir && a.getCodigo().equalsIgnoreCase(codigo));
+        }
     }
+
 
     private static class FakeEntregaDAO implements IEntregaDAO {
         final List<Entrega> entregasPersistidas = new ArrayList<>();
