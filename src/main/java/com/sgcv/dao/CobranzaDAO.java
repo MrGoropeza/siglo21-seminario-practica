@@ -45,7 +45,8 @@ public class CobranzaDAO implements ICobranzaDAO {
             ps.setString(1, cobranza.getNumeroRecibo());
             ps.setInt(2, cobranza.getIdCliente());
             ps.setInt(3, cobranza.getIdUsuario());
-            ps.setTimestamp(4, Timestamp.valueOf(cobranza.getFechaCobranza() != null ? cobranza.getFechaCobranza() : LocalDateTime.now()));
+            // setObject con LocalDateTime envia la fecha-hora local sin conversion de zona horaria
+            ps.setObject(4, cobranza.getFechaCobranza() != null ? cobranza.getFechaCobranza() : LocalDateTime.now());
             ps.setBigDecimal(5, cobranza.getMontoTotal());
             ps.setString(6, cobranza.getObservaciones());
 
