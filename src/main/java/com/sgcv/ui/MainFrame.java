@@ -162,6 +162,7 @@ public class MainFrame extends JFrame {
     private void inicializarUI() {
         tabbedPane = new JTabbedPane();
         tabbedPane.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        tabbedPane.setName("main.tabs");
 
         // Pestaña 1: Parada Comercial en Ruta (CU-01 + CU-02)
         entregaPanel = new EntregaPanel(entregaService, clienteService, articuloService, this::refrescarTodosLosDatos);
