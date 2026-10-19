@@ -37,11 +37,11 @@ INSERT INTO usuarios (id_usuario, username, password_hash, nombre_completo, rol,
 -- 2. CLIENTES (Canal Minorista B2B con Cuentas Corrientes)
 -- ------------------------------------------------------------------------------
 INSERT INTO clientes (id_cliente, razon_social, cuit, direccion, telefono, zona_reparto, saldo_cuenta_corriente, limite_credito, activo) VALUES
-(1, 'Polleria San Cayetano SRL', '30-71124589-8', 'Av. Rivadavia 4520, CABA', '11-4567-8901', 'Zona Oeste', 185000.00, 300000.00, TRUE),
-(2, 'Rotiseria y Carniceria El Sol', '20-28456123-4', 'Belgrano 1240, Moron', '11-4629-1122', 'Zona Oeste', 420000.00, 400000.00, TRUE), -- Límite excedido (alerta CU-01 S10)
+(1, 'Polleria San Cayetano SRL', '30-71124589-8', 'Av. Rivadavia 4520, CABA', '11-4567-8901', 'Zona Oeste', 124000.00, 300000.00, TRUE),
+(2, 'Rotiseria y Carniceria El Sol', '20-28456123-4', 'Belgrano 1240, Moron', '11-4629-1122', 'Zona Oeste', 120000.00, 100000.00, TRUE), -- Límite excedido (alerta CU-01 S10)
 (3, 'Granja y Comestibles Don Tito', '27-32987654-2', 'Mitre 850, Ramos Mejia', '11-4654-3344', 'Zona Norte', 0.00, 250000.00, TRUE),
-(4, 'Restaurante y Asador Las Brasas', '30-68954125-9', 'Av. Santa Fe 3200, Palermo', '11-4821-5566', 'Zona Norte', 260000.00, 500000.00, TRUE),
-(5, 'Polleria Los Primos', '20-35123987-1', 'San Martin 210, San Justo', '11-4484-7788', 'Zona Sur', 95000.00, 150000.00, TRUE);
+(4, 'Restaurante y Asador Las Brasas', '30-68954125-9', 'Av. Santa Fe 3200, Palermo', '11-4821-5566', 'Zona Norte', 445000.00, 500000.00, TRUE),
+(5, 'Polleria Los Primos', '20-35123987-1', 'San Martin 210, San Justo', '11-4484-7788', 'Zona Sur', 0.00, 150000.00, TRUE);
 
 -- ------------------------------------------------------------------------------
 -- 3. PROVEEDORES (Frigoríficos Avícolas y Plantas de Faena)
@@ -101,17 +101,14 @@ INSERT INTO detalle_entregas (id_detalle_entrega, id_entrega, id_articulo, canti
 -- ------------------------------------------------------------------------------
 INSERT INTO cobranzas (id_cobranza, numero_recibo, id_cliente, id_usuario, fecha_cobranza, monto_total, observaciones) VALUES
 (1, 'REC-0001-00000501', 1, 2, '2026-09-20 10:20:00', 200000.00, 'Pago a cuenta en parada comercial'),
-(2, 'REC-0001-00000502', 2, 2, '2026-09-20 11:35:00', 150000.00, 'Cobro mixto efectivo + transferencia bancaria'),
-(3, 'REC-0001-00000503', 5, 3, '2026-09-20 14:10:00', 95000.00, 'Cancelacion total de saldo anterior');
+(2, 'REC-0001-00000502', 2, 2, '2026-09-20 11:35:00', 150000.00, 'Cobro mixto efectivo + transferencia bancaria');
 
 INSERT INTO detalle_cobranzas (id_detalle_cobranza, id_cobranza, medio_pago, monto, referencia_operacion) VALUES
 -- Cobranza 1: 100% Efectivo en mano
 (1, 1, 'EFECTIVO', 200000.00, 'Cobro chofer camion 01'),
 -- Cobranza 2: Mixto (50.000 Efectivo + 100.000 Transferencia Bancaria)
 (2, 2, 'EFECTIVO', 50000.00, 'Billetes fajados'),
-(3, 2, 'TRANSFERENCIA', 100000.00, 'Bco Galicia Transf #994821'),
--- Cobranza 3: 100% Transferencia
-(4, 3, 'TRANSFERENCIA', 95000.00, 'Alias MP: PRIMOS.POLLO');
+(3, 2, 'TRANSFERENCIA', 100000.00, 'Bco Galicia Transf #994821');
 
 -- ------------------------------------------------------------------------------
 -- 8. PAGOS A PROVEEDORES (Cancelación de Deuda a Frigoríficos)
@@ -127,8 +124,8 @@ INSERT INTO detalle_pagos_proveedor (id_detalle_pago, id_pago_proveedor, medio_p
 -- 9. ARQUEO DE CAJA DIARIO (Cierre de Jornada y Conciliación Física)
 -- ------------------------------------------------------------------------------
 INSERT INTO arqueos_caja (id_arqueo, id_usuario, fecha_arqueo, saldo_inicial_efectivo, efectivo_esperado, efectivo_real_contado, diferencia_efectivo, fondo_reposicion_segregado, margen_neto_dia, observaciones, estado) VALUES
-(1, 1, '2026-09-20', 50000.00, 200000.00, 200000.00, 0.00, 150000.00, 126000.00, 'Cierre sin desvios. Fondo segregado reservado para faena manana.', 'CERRADO');
+(1, 1, '2026-09-20', 0.00, 250000.00, 250000.00, 0.00, 150000.00, 100000.00, 'Cierre sin desvios. Fondo segregado reservado para faena manana.', 'CERRADO');
 
 INSERT INTO detalle_arqueos (id_detalle_arqueo, id_arqueo, medio_pago, total_cobranzas, total_pagos_proveedor, saldo_neto) VALUES
 (1, 1, 'EFECTIVO', 250000.00, 100000.00, 150000.00),
-(2, 1, 'TRANSFERENCIA', 195000.00, 400000.00, -205000.00);
+(2, 1, 'TRANSFERENCIA', 100000.00, 400000.00, -300000.00);
