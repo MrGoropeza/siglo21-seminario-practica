@@ -1,80 +1,105 @@
 # SGCV - Sistema de Gestión Comercial y Distribución Avícola
 
-Prototipo operacional de escritorio desarrollado para el **Trabajo Práctico 2 de Seminario de Práctica de Informática (Universidad Siglo 21)**.
+Prototipo operacional de escritorio desarrollado para el **Trabajo Práctico 3 de Seminario de Práctica de Informática (Universidad Siglo 21)**.
 
-El sistema implementa el núcleo transaccional para una empresa distribuidora mayorista de bultos avícolas estándar (cajas cerradas), con soporte para cuentas corrientes en ruta, control de límites crediticios, inventario en depósito y congelamiento inmutable de precios históricos.
+El sistema implementa el núcleo transaccional de una distribuidora mayorista de bultos avícolas: parada comercial en ruta (remitos y cobranzas multi-medio), cierre y arqueo diario con segregación de fondos, administración de cuentas corrientes con libro mayor y catálogo dinámico de productos con precios históricos inmutables.
 
 ## Arquitectura del Sistema (3 Capas)
 
 El diseño desacoplado sigue el estándar del Proceso Unificado de Desarrollo (PUD):
-- **Presentación (`com.sgcv.ui`)**: Interfaz gráfica en Java Swing modernizada con Look & Feel FlatLaf. Formularios modulares con validación interactiva de crédito y selección de bultos.
-- **Servicios Transaccionales (`com.sgcv.service`)**: Capa de negocio con delimitación de fronteras transaccionales ACID (`EntregaService`). Orquesta validaciones de stock, advertencia de sobregiro crediticio y persistencia coordinada.
-- **Acceso a Datos (`com.sgcv.dao` y `com.sgcv.util`)**: Patrón DAO desacoplado mediante sentencias parametrizadas (`PreparedStatement`) sobre JDBC y gestión centralizada de conexiones con `DatabaseConnection`.
+
+- **Presentación (`com.sgcv.ui`)**: Interfaz gráfica en Java Swing modernizada con Look & Feel FlatLaf. Cuatro módulos operativos: parada en ruta, arqueo diario, cuentas corrientes y catálogo.
+- **Servicios Transaccionales (`com.sgcv.service`)**: Capa de negocio con fronteras transaccionales ACID (`EntregaService`, `CobranzaService`, `ArqueoService`). Orquesta validaciones de stock, control de riesgo crediticio, congelamiento de precios y persistencia coordinada.
+- **Acceso a Datos (`com.sgcv.dao` y `com.sgcv.util`)**: Patrón DAO con contratos de interfaz, sentencias parametrizadas (`PreparedStatement`) sobre JDBC, `try-with-resources` y gestión centralizada de conexiones en `DatabaseConnection`.
 - **Persistencia Relacional (`db/`)**: Base de datos MySQL 8.0+ bajo el motor transaccional InnoDB, normalizada en Tercera Forma Normal (3NF).
 
 ## Requisitos del Sistema
+
 - **Java**: OpenJDK 17 o superior.
 - **Base de Datos**: MySQL Server 8.0 o superior.
-- **Build / Gestor de Dependencias**: Apache Maven 3.8+ (compatible con IntelliJ IDEA, NetBeans y Eclipse).
+- **Build / Gestor de Dependencias**: Apache Maven 3.8+.
 
 ## Configuración de Base de Datos
 
 1. Iniciar el servicio de MySQL en `localhost:3306`.
-2. Ejecutar secuencialmente los scripts ubicados en la carpeta `db/`:
+2. Ejecutar secuencialmente los scripts de la carpeta `db/`:
+
    ```bash
    mysql -u root -p < db/01_schema.sql
    mysql -u root -p < db/02_data.sql
    ```
+
 3. (Opcional) Ejecutar las consultas de auditoría y reportes:
+
    ```bash
    mysql -u root -p < db/03_queries.sql
    ```
-4. Ajustar credenciales en `src/main/resources/db.properties` si difieren de `root / root`.
+
+4. Ajustar credenciales en `src/main/resources/db.properties` si difieren de las locales.
 
 ## Compilación y Ejecución
 
-### Mediante Maven
 ```bash
-# Compilar el proyecto y empaquetar el JAR
-mvn clean package
+# 1. Limpieza y compilación del código fuente
+mvn clean compile
 
-# Ejecutar el prototipo operacional
-java -jar target/sgcv-desktop-1.0.0.jar
+# 2. Empaquetado del artefacto (JAR con manifiesto y Class-Path a dependencias)
+mvn package
+
+# 3. Lanzamiento del prototipo operacional
+mvn exec:java -Dexec.mainClass="com.sgcv.App"
 ```
 
-### Mediante compilador directo (javac)
-```bash
-# Compilar fuentes
-javac -d target/classes $(find src/main/java -name "*.java")
+El objetivo `package` genera `target/sgcv-desktop-1.0.0.jar` con las dependencias declaradas por `Class-Path` en el manifiesto (`mysql-connector-j`, `flatlaf`, `protobuf-java`). Maven no las embebe dentro del JAR, por lo que la ejecución soportada es `mvn exec:java`, que resuelve el classpath completo. La invocación `java -jar` requiere copiar esas tres dependencias junto al artefacto.
 
-# Copiar archivo de configuración
-cp src/main/resources/db.properties target/classes/
-
-# Ejecutar la aplicación
-java -cp target/classes com.sgcv.App
-```
+La aplicación parte de un modelo de dominio con precios y costos congelados por operación, por lo que cualquier cambio de precios en el catálogo impacta únicamente en ventas futuras.
 
 ## Estructura de Paquetes
-```
+
+```text
 com.sgcv
-├── App.java                   # Punto de entrada de la aplicación
-├── model/                     # Entidades de dominio
+├── App.java                     # Punto de entrada de la aplicación
+├── model/                       # Entidades de dominio (13)
+│   ├── Articulo.java            # Clase base abstracta
+│   ├── ArticuloEstandar.java    # Precio de lista uniforme
+│   ├── ArticuloPromocional.java # Bonificación por volumen
 │   ├── Cliente.java
-│   ├── Articulo.java
 │   ├── Entrega.java
-│   └── DetalleEntrega.java
-├── dao/                       # Capa de persistencia JDBC
-│   ├── ClienteDAO.java
-│   ├── ArticuloDAO.java
-│   └── EntregaDAO.java
-├── service/                   # Capa de servicios transaccionales
-│   └── EntregaService.java
-├── ui/                        # Interfaz gráfica de usuario Swing
+│   ├── DetalleEntrega.java
+│   ├── Cobranza.java
+│   ├── DetalleCobranza.java
+│   ├── ArqueoCaja.java
+│   ├── DetalleArqueo.java
+│   ├── MovimientoCuentaCorriente.java
+│   ├── ParadaResult.java
+│   └── ResumenDiarioDTO.java
+├── dao/                         # Contratos e implementaciones JDBC (10)
+│   ├── IArticuloDAO.java / ArticuloDAO.java
+│   ├── IClienteDAO.java / ClienteDAO.java
+│   ├── IEntregaDAO.java / EntregaDAO.java
+│   ├── ICobranzaDAO.java / CobranzaDAO.java
+│   └── IArqueoDAO.java / ArqueoDAO.java
+├── service/                     # Contratos e implementaciones de negocio (10)
+│   ├── IArticuloService.java / ArticuloService.java
+│   ├── IClienteService.java / ClienteService.java
+│   ├── IEntregaService.java / EntregaService.java
+│   ├── ICobranzaService.java / CobranzaService.java
+│   └── IArqueoService.java / ArqueoService.java
+├── ui/                          # Interfaz Swing (6)
 │   ├── MainFrame.java
-│   └── EntregaPanel.java
-└── util/                      # Clases utilitarias
-    └── DatabaseConnection.java
+│   ├── EntregaPanel.java
+│   ├── ArqueoPanel.java
+│   ├── CuentasCorrientesPanel.java
+│   ├── ClienteDialog.java
+│   └── ClienteAutoCompleteBox.java
+├── util/                        # Infraestructura JDBC (1)
+│   └── DatabaseConnection.java
+└── exception/                   # Excepciones de dominio (3)
+    ├── StockInsuficienteException.java
+    ├── LimiteCreditoExcedidoException.java
+    └── ValidacionException.java
 ```
 
 ## Repositorio Oficial
+
 - **GitHub**: [https://github.com/MrGoropeza/siglo21-seminario-practica.git](https://github.com/MrGoropeza/siglo21-seminario-practica.git)
