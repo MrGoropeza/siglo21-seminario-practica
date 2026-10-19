@@ -194,8 +194,9 @@ public class ArqueoPanel extends JPanel {
         pCentro.setOpaque(false);
 
         // Fila 1: Saldo Inicial de Cambio
-        pCentro.add(crearFilaConcepto("Saldo Inicial (Fondo de Cambio):",
-                txtSaldoInicial = crearCampoMonto("0.00", false, "Dinero con el que salió la camioneta a la mañana")));
+        txtSaldoInicial = crearCampoMonto("0.00", false, "Dinero con el que salió la camioneta a la mañana");
+        txtSaldoInicial.setName("arqueo.saldoInicial");
+        pCentro.add(crearFilaConcepto("Saldo Inicial (Fondo de Cambio):", txtSaldoInicial));
 
         // Fila 2: (+) Cobranzas en Efectivo Hoy
         lblEfectivoCobrado = new JLabel("$0.00", SwingConstants.RIGHT);
@@ -204,8 +205,9 @@ public class ArqueoPanel extends JPanel {
         pCentro.add(crearFilaConcepto("(+) Cobranzas Efectivo de Hoy:", lblEfectivoCobrado));
 
         // Fila 3: (-) Gastos en Efectivo
-        pCentro.add(crearFilaConcepto("(-) Gastos de Ruta (Peajes / Nafta):",
-                txtGastosEfectivo = crearCampoMonto("0.00", false, "Total gastado en combustible, peajes o comida")));
+        txtGastosEfectivo = crearCampoMonto("0.00", false, "Total gastado en combustible, peajes o comida");
+        txtGastosEfectivo.setName("arqueo.gasto");
+        pCentro.add(crearFilaConcepto("(-) Gastos de Ruta (Peajes / Nafta):", txtGastosEfectivo));
 
         // Separador
         JSeparator sep = new JSeparator();
@@ -218,6 +220,7 @@ public class ArqueoPanel extends JPanel {
         lblEfectivoEsperado = new JLabel("$0.00", SwingConstants.RIGHT);
         lblEfectivoEsperado.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 15));
         lblEfectivoEsperado.setForeground(new Color(15, 45, 90));
+        lblEfectivoEsperado.setName("arqueo.esperado");
         pCentro.add(crearFilaConcepto("(=) Total que debería haber en el bolso:", lblEfectivoEsperado));
 
         pCentro.add(Box.createVerticalStrut(8));
@@ -244,6 +247,7 @@ public class ArqueoPanel extends JPanel {
                 new LineBorder(new Color(200, 160, 50), 2, true),
                 new EmptyBorder(2, 6, 2, 6)
         ));
+        txtEfectivoReal.setName("arqueo.efectivoReal");
         txtEfectivoReal.addFocusListener(new FocusAdapter() {
             @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtEfectivoReal::selectAll); }
         });
@@ -268,6 +272,7 @@ public class ArqueoPanel extends JPanel {
         lblDiferenciaCaja = new JLabel("👉 Ingrese el efectivo contado para verificar el cuadre", SwingConstants.CENTER);
         lblDiferenciaCaja.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         lblDiferenciaCaja.setForeground(new Color(90, 100, 115));
+        lblDiferenciaCaja.setName("arqueo.diferencia");
         panelBadgeDiferencia.add(lblDiferenciaCaja, BorderLayout.CENTER);
 
         pCentro.add(panelBadgeDiferencia);
@@ -378,6 +383,7 @@ public class ArqueoPanel extends JPanel {
                 new LineBorder(new Color(160, 195, 235), 2, true),
                 new EmptyBorder(2, 6, 2, 6)
         ));
+        txtFondoReposicion.setName("arqueo.fondo");
         txtFondoReposicion.addFocusListener(new FocusAdapter() {
             @Override public void focusGained(FocusEvent e) { SwingUtilities.invokeLater(txtFondoReposicion::selectAll); }
         });
@@ -411,6 +417,7 @@ public class ArqueoPanel extends JPanel {
         lblMargenNeto = new JLabel("$0.00", SwingConstants.CENTER);
         lblMargenNeto.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 22));
         lblMargenNeto.setForeground(new Color(15, 115, 45));
+        lblMargenNeto.setName("arqueo.margen");
 
         JLabel lblDescSobre2 = new JLabel("<html><i>Ganancia comercial efectiva tras apartar el sobre del proveedor.</i></html>", SwingConstants.CENTER);
         lblDescSobre2.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
@@ -440,6 +447,7 @@ public class ArqueoPanel extends JPanel {
         btnCerrarArqueo.setForeground(Color.WHITE);
         btnCerrarArqueo.setPreferredSize(new Dimension(0, 40));
         btnCerrarArqueo.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btnCerrarArqueo.setName("arqueo.cerrar");
         btnCerrarArqueo.addActionListener(e -> confirmarYCerrarArqueo());
         pCierre.add(btnCerrarArqueo, BorderLayout.SOUTH);
 
@@ -672,7 +680,7 @@ public class ArqueoPanel extends JPanel {
             arq.setFondoReposicionSegregado(fondoFrigo);
             arq.setMargenNetoDia(margenNeto);
             arq.setObservaciones(txtObservaciones.getText().trim());
-            arq.setEstado("CERRADO");
+            arq.setEstado(ArqueoCaja.estadoSegunDiferencia(diferencia));
 
             // Desglose de medios
             DetalleArqueo detEfec = new DetalleArqueo("EFECTIVO", resumenActual.getCobranzasEfectivoTotal(), gastos,

@@ -287,8 +287,8 @@ public class ClienteDialog extends JDialog {
         } catch (ValidacionException ve) {
             JOptionPane.showMessageDialog(this, ve.getMessage(), "Validación de Negocio", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException ex) {
-            String msg = ex.getMessage();
-            if (msg != null && msg.toLowerCase().contains("duplicate") && msg.toLowerCase().contains("cuit")) {
+            boolean duplicado = ex.getErrorCode() == 1062 || "23000".equals(ex.getSQLState());
+            if (duplicado) {
                 JOptionPane.showMessageDialog(this, "Ya existe otro cliente con el CUIT " + cuit + ". Por favor verifique.", "CUIT Duplicado", JOptionPane.ERROR_MESSAGE);
             } else {
                 JOptionPane.showMessageDialog(this, "Error al guardar cliente: " + ex.getMessage(), "Error SQL", JOptionPane.ERROR_MESSAGE);

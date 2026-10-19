@@ -112,7 +112,7 @@ public class CobranzaDAO implements ICobranzaDAO {
                             rs.getString("numero_recibo"),
                             rs.getInt("id_cliente"),
                             rs.getInt("id_usuario"),
-                            rs.getTimestamp("fecha_cobranza").toLocalDateTime(),
+                            rs.getObject("fecha_cobranza", LocalDateTime.class),
                             rs.getBigDecimal("monto_total"),
                             rs.getString("observaciones")
                     );

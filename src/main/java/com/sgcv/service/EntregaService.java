@@ -215,6 +215,10 @@ public class EntregaService implements IEntregaService {
         BigDecimal totalCobrado = tieneCobranza ? cobranza.getMontoTotal() : BigDecimal.ZERO;
         BigDecimal saldoProyectado = cliente.getSaldoCuentaCorriente().add(totalEntrega).subtract(totalCobrado);
 
+        if (tieneCobranza && saldoProyectado.compareTo(BigDecimal.ZERO) < 0) {
+            throw new ValidacionException("El monto cobrado no puede superar el saldo deudor del cliente.");
+        }
+
         if (saldoProyectado.compareTo(cliente.getLimiteCredito()) > 0) {
             boolean autorizadoPorObservaciones = entrega != null && entrega.getObservaciones() != null &&
                     entrega.getObservaciones().toLowerCase().contains("autorizad");

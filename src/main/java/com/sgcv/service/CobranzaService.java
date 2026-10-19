@@ -3,6 +3,7 @@ package com.sgcv.service;
 import com.sgcv.dao.CobranzaDAO;
 import com.sgcv.dao.ICobranzaDAO;
 import com.sgcv.exception.ValidacionException;
+import com.sgcv.model.Cliente;
 import com.sgcv.model.Cobranza;
 import com.sgcv.util.DatabaseConnection;
 
@@ -37,6 +38,13 @@ public class CobranzaService implements ICobranzaService {
         }
         if (cobranza.getDetalles() == null || cobranza.getDetalles().isEmpty()) {
             throw new ValidacionException("Debe ingresar al menos un medio de pago.");
+        }
+        Cliente cliente = new ClienteService().buscarPorId(cobranza.getIdCliente());
+        if (cliente == null) {
+            throw new ValidacionException("Cliente inexistente con ID: " + cobranza.getIdCliente());
+        }
+        if (cobranza.getMontoTotal().compareTo(cliente.getSaldoCuentaCorriente()) > 0) {
+            throw new ValidacionException("El monto cobrado no puede superar el saldo deudor del cliente.");
         }
         return cobranzaDAO.registrarCobranza(cobranza);
     }

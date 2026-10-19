@@ -187,7 +187,14 @@ public class ArticuloService implements IArticuloService {
         if (articuloDAO.existeCodigo(articulo.getCodigo(), 0)) {
             throw new ValidacionException("Ya existe un producto con el código '" + articulo.getCodigo().toUpperCase().trim() + "'.");
         }
-        return articuloDAO.crearArticulo(articulo);
+        try {
+            return articuloDAO.crearArticulo(articulo);
+        } catch (SQLException ex) {
+            if (ex.getErrorCode() == 1062 || "23000".equals(ex.getSQLState())) {
+                throw new ValidacionException("Ya existe un producto con el código '" + articulo.getCodigo().toUpperCase().trim() + "'.");
+            }
+            throw ex;
+        }
     }
 
     @Override

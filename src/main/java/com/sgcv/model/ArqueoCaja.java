@@ -96,6 +96,19 @@ public class ArqueoCaja {
     public void setMargenNetoDia(BigDecimal margenNetoDia) { this.margenNetoDia = margenNetoDia; }
 
     public String getObservaciones() { return observaciones; }
+    /**
+     * Deriva el estado del arqueo a partir de la diferencia de caja.
+     *
+     * @param diferencia efectivo contado menos efectivo esperado
+     * @return {@code "AJUSTADO"} si hay diferencia distinta de cero, {@code "CERRADO"} en caso contrario
+     */
+    public static String estadoSegunDiferencia(BigDecimal diferencia) {
+        if (diferencia == null || diferencia.compareTo(BigDecimal.ZERO) == 0) {
+            return "CERRADO";
+        }
+        return "AJUSTADO";
+    }
+
     public void setObservaciones(String observaciones) { this.observaciones = observaciones; }
 
     public String getEstado() { return estado; }
