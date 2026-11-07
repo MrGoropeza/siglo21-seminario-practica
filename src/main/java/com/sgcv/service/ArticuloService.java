@@ -129,8 +129,16 @@ public class ArticuloService implements IArticuloService {
     // =========================================================================
 
     /**
-     * Ejecuta una búsqueda dicotómica/binaria iterativa clásica sobre una colección
-     * ordenada lexicográficamente por código de producto.
+     * Ejecuta una búsqueda dicotómica/binaria iterativa clásica sobre el catálogo
+     * ordenado lexicográficamente por código de producto.
+     *
+     * <p>La colección dinámica de acumulación ({@code ArrayList}) se proyecta a un
+     * arreglo nativo {@code Articulo[]} de tamaño fijo, de modo que el acceso
+     * posicional directo {@code arreglo[medio]} característico del algoritmo quede
+     * expresado sobre la estructura de datos que la búsqueda binaria clásica asume.
+     * Así, arreglos y {@code ArrayList} se usan de forma complementaria: el
+     * {@code ArrayList} acumula dinámicamente desde el DAO y la UI, y el arreglo
+     * nativo es la vista indexada sobre la que opera el algoritmo.</p>
      *
      * @param listaOrdenadaPorCodigo lista ordenada por código de artículo
      * @param codigoBuscado código a localizar
@@ -142,13 +150,15 @@ public class ArticuloService implements IArticuloService {
             return -1;
         }
 
+        Articulo[] arreglo = listaOrdenadaPorCodigo.toArray(new Articulo[0]);
+
         String clave = codigoBuscado.trim();
         int bajo = 0;
-        int alto = listaOrdenadaPorCodigo.size() - 1;
+        int alto = arreglo.length - 1;
 
         while (bajo <= alto) {
             int medio = bajo + (alto - bajo) / 2;
-            Articulo articuloMedio = listaOrdenadaPorCodigo.get(medio);
+            Articulo articuloMedio = arreglo[medio];
             if (articuloMedio == null || articuloMedio.getCodigo() == null) {
                 return -1;
             }
