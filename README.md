@@ -54,16 +54,6 @@ El objetivo `package` genera `target/sgcv-desktop-1.0.0.jar` con las dependencia
 
 La aplicación parte de un modelo de dominio con precios y costos congelados por operación, por lo que cualquier cambio de precios en el catálogo impacta únicamente en ventas futuras.
 
-## Pruebas Automatizadas
-
-La suite se ejecuta con JUnit 5 y requiere una instancia local de MySQL con el esquema y el seed cargados:
-
-```bash
-mvn test
-```
-
-Incluye 27 tests de dominio y algoritmos (sin base de datos), 3 tests de integración contra MySQL y 10 tests de interfaz Swing que construyen los paneles reales en el EDT y verifican navegación y recálculo de caja con `doClick()` programático. Los tests de integración crean y eliminan sus propios datos, sin modificar el seed.
-
 ## Estructura de Paquetes
 
 ```text

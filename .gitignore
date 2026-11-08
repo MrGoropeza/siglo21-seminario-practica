@@ -61,3 +61,6 @@ nbdist/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Artefactos de evidencia del build
+dist/
